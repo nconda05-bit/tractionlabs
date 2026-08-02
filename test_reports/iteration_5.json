@@ -1,0 +1,28 @@
+{
+  "summary": "Higgsfield AI ad-visual wiring verification (bug-fix regression for model_not_found 404). Added 4 new pytest cases in TestAdVisual (auth guards, POST job creation, GET polling with graceful out-of-credits, video kind acceptance) — all 4 PASS. Full frontend E2E on TEST_E2E_HVAC (ed236514-80b5-4314-8f42-b5005dd733e2): logged in as nasir@tractionlabs.com, opened Ad Creator tab, confirmed 8 ad-visual cards each with gen-visual-image + gen-visual-video buttons, clicked Generate image → 'Rendering with Higgsfield…' spinner shown → within ~4s coral inline error rendered: 'Your Higgsfield account is out of credits. Add credits at cloud.higgsfield.ai and try again.' No app crash, no 500, no model_not_found 404 — bug fix confirmed. Route now correctly uses higgsfield-ai/soul/v2/standard and higgsfield-ai/dop/turbo.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_visual.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~922 lines — still above the 700-line threshold. Split into routers (auth, clients, ai, docs, sales, ads, reports, portal, visuals) before adding Meta Ads sync.",
+    "higgsfield_service._submit_and_poll uses `credit` substring match on 403 body text — brittle if Higgsfield changes error wording; consider also matching HTTP 402 or a JSON error code once Higgsfield documents one.",
+    "run_visual_job stores full error string truncated to 300 chars; consider also persisting the upstream status code for easier debugging (currently only the message reaches the UI).",
+    "AdVisual.jsx polls every 2.5s for up to 5 minutes but there is no client-side abort on component unmount — navigating away mid-generation will leak the polling loop and setState-on-unmounted warnings.",
+    "Video generation chains image→image2video sequentially inside a single BackgroundTask; a video job with a slow first stage could easily exceed the 5-min poll timeout. Consider status transitions ('rendering_image', 'rendering_video') so the UI shows real progress."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/iteration_5.json"
+  ],
+  "success_rate": {"backend": "100% (4/4 new visual tests, 25/25 total)", "frontend": "100% (E2E: login → Ad Creator → Generate image → graceful out-of-credits inline error)"},
+  "test_credentials": "nasir@tractionlabs.com / TractionLabs2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — test used existing demo client TEST_E2E_HVAC and its pre-existing 8 ad variations. Two media_jobs docs created (one image, one video) both persisted with status='failed' + graceful credit error.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Higgsfield wiring is verified working end-to-end with graceful zero-credits error handling. To retest a real generation, top up credits at cloud.higgsfield.ai and re-run TestAdVisual::test_visual_create_and_graceful_out_of_credits — status should flip to 'completed' with a media_url. Meta Ads sync still not implemented (awaiting user credentials). Pytest command: `pytest backend/tests/backend_test.py -v -n 0`. Demo client id: ed236514-80b5-4314-8f42-b5005dd733e2.",
+  "rca of the issue": "Previous bug (model_not_found 404) was caused by wrong Higgsfield model slug. Fix in /app/backend/higgsfield_service.py sets IMAGE_MODEL='higgsfield-ai/soul/v2/standard' and VIDEO_MODEL='higgsfield-ai/dop/turbo' (correct slugs). Additionally, HiggsfieldError(403 + 'credit') is caught in run_visual_job and surfaced to the UI via media_jobs.error, which AdVisual.jsx renders as a coral inline message. Verified: no 404, no 500, no crash — bug is fixed."
+}

@@ -342,3 +342,61 @@ class TestReportsAndPortal:
 
         # cleanup
         requests.delete(f"{API}/reports/{report['id']}", headers=auth, timeout=15)
+
+
+
+# ---------------- AD VISUALS (Higgsfield) ----------------
+class TestAdVisual:
+    def test_visual_requires_auth(self):
+        r = requests.post(f"{API}/ads/visual", json={"prompt": "Test", "kind": "image"}, timeout=15)
+        assert r.status_code in (401, 403), f"Expected 401/403 without auth, got {r.status_code}"
+
+    def test_visual_get_requires_auth(self):
+        r = requests.get(f"{API}/ads/visual/nonexistent-id", timeout=15)
+        assert r.status_code in (401, 403)
+
+    def test_visual_create_and_graceful_out_of_credits(self, auth):
+        import time
+        # Create a visual job (image)
+        r = requests.post(f"{API}/ads/visual",
+                          json={"prompt": "A modern HVAC technician fixing a unit, cinematic lighting", "kind": "image"},
+                          headers=auth, timeout=30)
+        assert r.status_code in (200, 202), f"Expected 200/202, got {r.status_code}: {r.text}"
+        job = r.json()
+        assert "id" in job
+        assert job["status"] == "queued"
+        assert job["kind"] == "image"
+        job_id = job["id"]
+
+        # Poll for up to ~25s waiting for background task to finish
+        final = None
+        for _ in range(25):
+            time.sleep(1)
+            g = requests.get(f"{API}/ads/visual/{job_id}", headers=auth, timeout=15)
+            assert g.status_code == 200, f"GET failed: {g.status_code} {g.text}"
+            j = g.json()
+            if j["status"] in ("completed", "failed"):
+                final = j
+                break
+
+        assert final is not None, "Job did not finish within 25s"
+        # Must NOT crash (500) — this endpoint always returns 200.
+        # Success = graceful 'failed' with out-of-credits (account has zero credits)
+        # OR 'completed' if credits ever get added (unlikely but not a failure)
+        assert final["status"] in ("failed", "completed")
+        if final["status"] == "failed":
+            err = (final.get("error") or "").lower()
+            # Must be the graceful credit error, NOT a model_not_found
+            assert "model_not_found" not in err, f"model_not_found bug regressed: {err}"
+            assert "404" not in err, f"Unexpected 404: {err}"
+            assert "credit" in err, f"Expected out-of-credits message, got: {err}"
+
+    def test_visual_video_kind_accepted(self, auth):
+        # Just verify that kind=video is accepted and returns a queued job (background task will fail gracefully)
+        r = requests.post(f"{API}/ads/visual",
+                          json={"prompt": "HVAC before/after transformation reel", "kind": "video"},
+                          headers=auth, timeout=30)
+        assert r.status_code in (200, 202), f"Expected 200/202, got {r.status_code}: {r.text}"
+        job = r.json()
+        assert job["kind"] == "video"
+        assert job["status"] == "queued"

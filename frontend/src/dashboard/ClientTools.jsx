@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Loader2, Sparkles, Megaphone, PhoneCall, BarChart3, Copy, Trash2, ExternalLink,
-  Target, ShieldAlert, ThumbsDown, Trophy, Gauge,
+  Target, ShieldAlert, ThumbsDown, Trophy, Gauge, Image as ImageIcon, Video, AlertCircle,
 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -10,6 +10,53 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const copy = (text) => { navigator.clipboard?.writeText(text); toast.success("Copied"); };
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* ============ AD VISUAL (Higgsfield) ============ */
+function AdVisual({ prompt }) {
+  const [status, setStatus] = useState("idle"); // idle | working | done | error
+  const [url, setUrl] = useState(null);
+  const [mediaKind, setMediaKind] = useState("image");
+  const [err, setErr] = useState("");
+
+  const run = async (kind) => {
+    setStatus("working"); setUrl(null); setErr(""); setMediaKind(kind);
+    try {
+      const { data } = await api.post("/ads/visual", { prompt, kind });
+      for (let i = 0; i < 120; i++) {
+        await sleep(2500);
+        const { data: job } = await api.get(`/ads/visual/${data.id}`);
+        if (job.status === "completed") { setUrl(job.media_url); setStatus("done"); return; }
+        if (job.status === "failed") { setErr(job.error || "Generation failed"); setStatus("error"); return; }
+      }
+      setErr("Generation timed out"); setStatus("error");
+    } catch (e) {
+      setErr(e?.response?.data?.detail || "Could not start generation"); setStatus("error");
+    }
+  };
+
+  return (
+    <div className="mt-3 border-t border-white/5 pt-3" data-testid="ad-visual">
+      <div className="flex items-center gap-2">
+        <button onClick={() => run("image")} disabled={status === "working"} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-electric/60 hover:bg-electric/10 transition-colors disabled:opacity-50" data-testid="gen-visual-image">
+          <ImageIcon size={13} /> Generate image
+        </button>
+        <button onClick={() => run("video")} disabled={status === "working"} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-electric/60 hover:bg-electric/10 transition-colors disabled:opacity-50" data-testid="gen-visual-video">
+          <Video size={13} /> Generate video
+        </button>
+        {status === "working" && <span className="flex items-center gap-1.5 text-xs text-slate-400"><Loader2 size={13} className="animate-spin" /> Rendering with Higgsfield…</span>}
+      </div>
+      {status === "error" && (
+        <p className="mt-2 flex items-start gap-2 text-xs text-coral"><AlertCircle size={13} className="mt-0.5 shrink-0" />{err}</p>
+      )}
+      {status === "done" && url && (
+        mediaKind === "video"
+          ? <video src={url} controls className="mt-3 rounded-lg max-h-72 border border-white/10" data-testid="visual-video" />
+          : <img src={url} alt="Generated ad creative" className="mt-3 rounded-lg max-h-72 border border-white/10" data-testid="visual-image" />
+      )}
+    </div>
+  );
+}
 
 /* ============ AD CREATOR ============ */
 export function AdCreator({ clientId }) {
@@ -87,6 +134,7 @@ export function AdCreator({ clientId }) {
                         <button onClick={() => copy(`${ad.headline}\n\n${ad.primary_text}\n\nCTA: ${ad.cta}`)} className="text-slate-500 hover:text-electric opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs"><Copy size={13} /> Copy</button>
                       </div>
                       {ad.image_prompt && <p className="mt-2 text-xs text-slate-500 italic">Visual: {ad.image_prompt}</p>}
+                      <AdVisual prompt={ad.image_prompt || `${ad.headline}. ${ad.primary_text}`} />
                     </div>
                   ))}
                 </div>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Request, Depends, Response, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from pathlib import Path
@@ -21,6 +21,7 @@ from auth_service import (
     hash_password, verify_password, create_access_token, decode_token,
 )
 import ai_service
+import higgsfield_service
 from pdf_utils import render_document_pdf
 
 # MongoDB
@@ -772,6 +773,42 @@ async def list_ad_campaigns(client_id: Optional[str] = None, user: dict = Depend
 async def delete_ad_campaign(ad_id: str, user: dict = Depends(get_current_user)):
     await db.ad_campaigns.delete_one({"id": ad_id})
     return {"status": "deleted"}
+
+
+# ==================== AD VISUALS (Higgsfield) ====================
+class VisualRequest(BaseModel):
+    prompt: str
+    kind: str = "image"  # image | video
+    aspect_ratio: Optional[str] = None
+
+
+async def run_visual_job(job_id: str, kind: str, prompt: str, aspect_ratio: str):
+    try:
+        url = await higgsfield_service.generate_media(kind, prompt, aspect_ratio)
+        await db.media_jobs.update_one({"id": job_id}, {"$set": {"status": "completed", "media_url": url}})
+    except Exception as e:
+        await db.media_jobs.update_one({"id": job_id}, {"$set": {"status": "failed", "error": str(e)[:300]}})
+
+
+@api_router.post("/ads/visual")
+async def create_visual(payload: VisualRequest, background_tasks: BackgroundTasks,
+                        user: dict = Depends(get_current_user)):
+    kind = "video" if payload.kind == "video" else "image"
+    ar = payload.aspect_ratio or ("9:16" if kind == "video" else "3:4")
+    job = {"id": str(uuid.uuid4()), "status": "queued", "kind": kind, "prompt": payload.prompt,
+           "media_url": None, "error": None, "created_at": now_iso()}
+    await db.media_jobs.insert_one({**job})
+    background_tasks.add_task(run_visual_job, job["id"], kind, payload.prompt, ar)
+    job.pop("_id", None)
+    return job
+
+
+@api_router.get("/ads/visual/{job_id}")
+async def get_visual(job_id: str, user: dict = Depends(get_current_user)):
+    j = await db.media_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not j:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return j
 
 
 # ==================== CLIENT PORTAL & REPORTS ====================
