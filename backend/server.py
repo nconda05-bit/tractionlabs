@@ -736,6 +736,8 @@ async def create_ad_campaign(payload: AdCreateRequest, user: dict = Depends(get_
     c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
+    proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
+    angles_line = ("\nPROVEN ANGLES that have worked for this niche (lean into these): " + "; ".join(proven)) if proven else ""
     try:
         data = await ai_service.ask_claude_json(
             system_message=(
@@ -749,7 +751,7 @@ async def create_ad_campaign(payload: AdCreateRequest, user: dict = Depends(get_
             prompt=(
                 f"Client: {c.get('business_name')} | industry={c.get('industry')} | "
                 f"cities={c.get('target_cities')} | services={c.get('services')} | budget={c.get('budget')} | "
-                f"offer/notes={c.get('notes')}\nExtra direction: {payload.prompt or 'none'}"
+                f"offer/notes={c.get('notes')}\nExtra direction: {payload.prompt or 'none'}{angles_line}"
             ),
             session_id=f"ads-{payload.client_id}",
         )
@@ -839,6 +841,8 @@ async def analyze_competitor(payload: CompetitorAnalyzeRequest, user: dict = Dep
         raise HTTPException(status_code=404, detail="Client not found")
     if not payload.competitor_text and not payload.image_base64:
         raise HTTPException(status_code=400, detail="Provide competitor ad text and/or an image to analyze.")
+    proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
+    angles_line = ("\nPROVEN ANGLES for this niche (favor building on these when recommending copy): " + "; ".join(proven)) if proven else ""
     try:
         data = await ai_service.ask_claude_json(
             system_message=(
@@ -854,7 +858,7 @@ async def analyze_competitor(payload: CompetitorAnalyzeRequest, user: dict = Dep
                 f"OUR CLIENT: {c.get('business_name')} | industry={c.get('industry')} | "
                 f"services={c.get('services')} | cities={c.get('target_cities')} | offer/notes={c.get('notes')}\n\n"
                 f"COMPETITOR: {payload.competitor_name or 'Unknown'}\n"
-                f"COMPETITOR AD TEXT: {payload.competitor_text or '(see attached image)'}"
+                f"COMPETITOR AD TEXT: {payload.competitor_text or '(see attached image)'}{angles_line}"
             ),
             session_id=f"competitor-{payload.client_id}",
             image_b64=payload.image_base64,
@@ -882,6 +886,88 @@ async def list_competitor_analyses(client_id: Optional[str] = None, user: dict =
 @api_router.delete("/ads/competitor-analyses/{analysis_id}")
 async def delete_competitor_analysis(analysis_id: str, user: dict = Depends(get_current_user)):
     await db.competitor_analyses.delete_one({"id": analysis_id})
+    return {"status": "deleted"}
+
+
+# ==================== WINNING ANGLE TRACKER ====================
+class AngleCreate(BaseModel):
+    client_id: str
+    tactic: str
+    source_analysis_id: Optional[str] = None
+    status: Optional[str] = "reused"  # testing | reused | won
+
+
+class AngleUpdate(BaseModel):
+    status: Optional[str] = None
+    outcome: Optional[str] = None
+
+
+async def get_proven_angles(industry: str = "", client_id: str = "", limit: int = 8):
+    """Return proven angle tactics for a niche (won first, then reused), for AI context."""
+    q = {"$or": []}
+    if industry:
+        q["$or"].append({"industry": {"$regex": f"^{industry}$", "$options": "i"}})
+    if client_id:
+        q["$or"].append({"client_id": client_id})
+    if not q["$or"]:
+        return []
+    docs = await db.angles.find(q, {"_id": 0}).to_list(200)
+    docs.sort(key=lambda a: {"won": 0, "reused": 1, "testing": 2}.get(a.get("status"), 3))
+    seen, out = set(), []
+    for d in docs:
+        t = (d.get("tactic") or "").strip()
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            out.append(f"[{d.get('status')}] {t}")
+        if len(out) >= limit:
+            break
+    return out
+
+
+@api_router.post("/angles")
+async def create_angle(payload: AngleCreate, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    doc = {"id": str(uuid.uuid4()), "client_id": payload.client_id,
+           "client_name": c.get("business_name"), "industry": c.get("industry", ""),
+           "tactic": payload.tactic, "source_analysis_id": payload.source_analysis_id,
+           "status": payload.status if payload.status in ("testing", "reused", "won") else "reused",
+           "outcome": "", "created_at": now_iso()}
+    await db.angles.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/angles")
+async def list_angles(client_id: Optional[str] = None, industry: Optional[str] = None,
+                      status: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {}
+    if client_id:
+        q["client_id"] = client_id
+    if industry:
+        q["industry"] = {"$regex": f"^{industry}$", "$options": "i"}
+    if status:
+        q["status"] = status
+    return await db.angles.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.put("/angles/{angle_id}")
+async def update_angle(angle_id: str, payload: AngleUpdate, user: dict = Depends(get_current_user)):
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "status" in updates and updates["status"] not in ("testing", "reused", "won"):
+        updates.pop("status")
+    if updates:
+        await db.angles.update_one({"id": angle_id}, {"$set": updates})
+    a = await db.angles.find_one({"id": angle_id}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Angle not found")
+    return a
+
+
+@api_router.delete("/angles/{angle_id}")
+async def delete_angle(angle_id: str, user: dict = Depends(get_current_user)):
+    await db.angles.delete_one({"id": angle_id})
     return {"status": "deleted"}
 
 

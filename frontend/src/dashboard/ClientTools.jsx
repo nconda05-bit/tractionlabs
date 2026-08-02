@@ -157,12 +157,31 @@ export function AdIntel({ clientId }) {
   const [imgName, setImgName] = useState("");
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]);
+  const [angles, setAngles] = useState([]);
 
   const load = async () => {
     const { data } = await api.get(`/ads/competitor-analyses?client_id=${clientId}`);
     setItems(data);
   };
-  useEffect(() => { load(); }, [clientId]);
+  const loadAngles = async () => {
+    const { data } = await api.get(`/angles?client_id=${clientId}`);
+    setAngles(data);
+  };
+  useEffect(() => { load(); loadAngles(); }, [clientId]);
+
+  const trackAngle = async (tactic, sourceId) => {
+    try {
+      await api.post("/angles", { client_id: clientId, tactic, source_analysis_id: sourceId });
+      toast.success("Angle tracked — AI will lean into it");
+      loadAngles();
+    } catch { toast.error("Could not track angle"); }
+  };
+  const cycleAngle = async (a) => {
+    const next = { testing: "reused", reused: "won", won: "testing" }[a.status] || "reused";
+    await api.put(`/angles/${a.id}`, { status: next });
+    loadAngles();
+  };
+  const removeAngle = async (id) => { await api.delete(`/angles/${id}`); loadAngles(); };
 
   const onFile = (e) => {
     const file = e.target.files?.[0];
@@ -211,6 +230,25 @@ export function AdIntel({ clientId }) {
         </div>
       </div>
 
+      {angles.length > 0 && (
+        <div className="card-surface rounded-2xl p-6 mt-6" data-testid="winning-angles">
+          <div className="flex items-center gap-2 text-electric"><Trophy size={18} /><h3 className="font-heading font-semibold text-lg">Winning Angles — {items[0]?.client_name || "this niche"}</h3></div>
+          <p className="mt-1 text-slate-400 text-sm">Tactics you've tracked. The AI leans into these when writing new ads. Click a status to cycle Testing → Reused → Won.</p>
+          <div className="mt-4 space-y-2">
+            {angles.map((a) => {
+              const styles = { testing: "text-amber-400 bg-amber-400/10", reused: "text-electric bg-electric/10", won: "text-emerald-400 bg-emerald-400/10" };
+              return (
+                <div key={a.id} className="flex items-center gap-3 group rounded-lg bg-white/5 px-4 py-2.5" data-testid={`angle-${a.id}`}>
+                  <button onClick={() => cycleAngle(a)} className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-full shrink-0 ${styles[a.status] || "text-slate-400 bg-white/5"}`} data-testid={`angle-status-${a.id}`}>{a.status}</button>
+                  <span className="flex-1 text-sm text-slate-300">{a.tactic}</span>
+                  <button onClick={() => removeAngle(a.id)} className="text-slate-600 hover:text-coral opacity-0 group-hover:opacity-100 transition-opacity shrink-0"><Trash2 size={14} /></button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 space-y-6">
         {items.map((it) => {
           const d = it.data || {};
@@ -240,7 +278,15 @@ export function AdIntel({ clientId }) {
                 <div className="rounded-xl bg-white/5 p-4">
                   <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2 flex items-center gap-1.5"><Swords size={13} /> How we win</p>
                   <ul className="space-y-1.5 text-sm text-slate-300">
-                    {(d.how_to_win || []).map((w, i) => <li key={i} className="flex gap-2"><span className="text-electric">→</span>{w}</li>)}
+                    {(d.how_to_win || []).map((w, i) => (
+                      <li key={i} className="flex gap-2 items-start group/tactic">
+                        <span className="text-electric">→</span>
+                        <span className="flex-1">{w}</span>
+                        <button onClick={() => trackAngle(w, it.id)} title="Track this angle" className="text-slate-600 hover:text-emerald-400 opacity-0 group-hover/tactic:opacity-100 transition-opacity shrink-0" data-testid="track-angle-btn">
+                          <Trophy size={13} />
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
