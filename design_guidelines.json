@@ -1,0 +1,172 @@
+{
+  "project_context": {
+    "agency_name": "Traction Labs",
+    "positioning": "We build customer acquisition systems that help local businesses attract, convert, and track new customers.",
+    "brand_personality": [
+      "modern",
+      "premium",
+      "data-driven",
+      "innovative",
+      "trustworthy",
+      "results-focused"
+    ],
+    "target_audience": "Local service businesses (HVAC, landscapers, contractors, roofers, painters, home service).",
+    "theme": "dark_premium_hybrid",
+    "goal": "Convert local business owners into booked consultations."
+  },
+  "typography": {
+    "rules": "Avoid Inter/Space Grotesk. Optimize for premium SaaS aesthetic with authoritative geometric headings and high-legibility body text.",
+    "fonts": {
+      "heading": "Cabinet Grotesk",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter text-white",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight text-white",
+      "h4": "text-lg sm:text-xl font-medium tracking-tight text-white",
+      "body": "text-base sm:text-lg leading-relaxed text-slate-300 font-body",
+      "overline": "text-xs sm:text-sm uppercase tracking-[0.2em] font-mono font-bold text-blue-500",
+      "quote": "text-xl sm:text-2xl font-light italic text-slate-200 border-l-2 border-blue-500 pl-4"
+    }
+  },
+  "colors": {
+    "base": {
+      "background_primary": "#050816",
+      "background_secondary": "#0B1020",
+      "surface": "#12182B"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#94A3B8",
+      "muted": "#64748B"
+    },
+    "brand": {
+      "primary_accent": "#3B82F6",
+      "secondary_accent": "#FF5A3C"
+    },
+    "borders": {
+      "subtle": "rgba(255, 255, 255, 0.05)",
+      "medium": "rgba(255, 255, 255, 0.1)"
+    },
+    "gradients": {
+      "hero_glow": "radial-gradient(circle at top, rgba(59, 130, 246, 0.15) 0%, rgba(5, 8, 22, 0) 60%)",
+      "card_hover": "linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%)"
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "Use backdrop-blur-xl bg-slate-900/40 with 1px border-white/5 for navbars, sticky headers, and floating overlays. Never use completely transparent backgrounds.",
+    "shadows": "Keep shadows deep and minimal. Use shadow-[0_8px_30px_rgb(0,0,0,0.4)] for floating elements.",
+    "borders": "1px inner strokes (border-white/10) to separate components from dark backgrounds. Avoid thick borders.",
+    "textures": "Incorporate subtle noise/grain texture overlaid at 2% opacity to break digital flatness."
+  },
+  "layouts": {
+    "spacing": "Generous. Use py-24 or py-32 for section dividers. Internal component padding should be p-8 to p-12.",
+    "grid_system": "Bento Grid protocol for feature cards. Mix 3+ shapes (e.g., span-8, span-4, tall lists).",
+    "container": "Max width 1280px (max-w-7xl) with px-6 or px-8 side padding."
+  },
+  "responsive": {
+    "breakpoint_strategy": "Mobile-first approach. All complex grids stack vertically (grid-cols-1) on mobile.",
+    "typography_scaling": "Fluid or clamped scaling. H1 goes from text-4xl (mobile) to text-6xl (desktop).",
+    "overflow_guard": "Ensure overflow-x-hidden on the main wrapper. Pad containers to prevent edge-hugging.",
+    "tap_targets": "Minimum 44x44px for buttons and calendar selectors."
+  },
+  "motion": {
+    "stack": ["framer-motion", "lenis"],
+    "hero": "Kinetic Hero with staggered line-by-line text reveal (y: 20, opacity: 0 to y: 0, opacity: 1, stagger: 0.1s).",
+    "marquee": "Slow editorial marquee for industry logos or core pillars. 30s-40s duration, seamless loop.",
+    "scroll_reveal": "Fade up with slight y-translate (y: 30px) hooked to ScrollTrigger/useInView for sections.",
+    "hover_states": "Buttons and cards should scale up slightly (scale: 1.02) and increase border opacity. Use pure CSS transitions (duration-300 ease-out) for basic hovers, Framer Motion for complex."
+  },
+  "components": [
+    {
+      "name": "Navigation Bar",
+      "style": "Crystal Glass style. Sticky top, backdrop-blur-xl bg-[#0B1020]/70 border-b border-white/5.",
+      "behavior": "Visible logo, 4 central links, prominent 'Book Audit' button on right."
+    },
+    {
+      "name": "Primary CTA Button",
+      "style": "Electric blue background (bg-blue-500 hover:bg-blue-600) with white text. Pill-shaped (rounded-full) or subtle 8px radius. Include a right-pointing arrow icon.",
+      "testing": "data-testid='primary-cta-button'"
+    },
+    {
+      "name": "Consultation Booking Calendar",
+      "style": "Dark-mode Shadcn Calendar with custom blue-500 active states. Clean layout. Integrated time slot picker (styled as toggleable grid buttons).",
+      "testing": "data-testid='booking-calendar'"
+    },
+    {
+      "name": "Industry Bento Cards",
+      "style": "Aceternity 'Tracing Beam' or dark gradient borders. Deep #12182B background with 1px border-white/5.",
+      "testing": "data-testid='industry-card'"
+    }
+  ],
+  "pages": {
+    "Homepage": {
+      "sections": [
+        "Hero: Kinetic text + Parallax dark dashboard 3D visualization.",
+        "Marquee: 'Trusted by over 500 local service professionals'.",
+        "Problem Manifesto: 'Stop Guessing Start Growing' - Numbered layout.",
+        "System: 5-step Growth System using a vertical timeline or staggered grid.",
+        "Who We Help: Bento grid of industry cards (HVAC, Roofers, etc.).",
+        "Differentiators: 'What Makes Us Different' - Abstract UI cards.",
+        "Pricing Philosophy: Clean text section with Coral accent CTA.",
+        "Testimonials: Slider or masonry grid of client reviews.",
+        "FAQ: Accordion (Shadcn) styled with minimal borders."
+      ]
+    },
+    "Contact": {
+      "sections": [
+        "Header: 'Book Your Free Growth Audit'.",
+        "Content: Two-column layout. Left: Trust markers & info. Right: Embedded Calendar + Time Picker + Lead Form."
+      ]
+    }
+  },
+  "image_urls": [
+    {
+      "category": "Dashboard / Growth Metric Visual",
+      "url": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDR8MHwxfHNlYXJjaHwxfHxidXNpbmVzcyUyMGdyb3d0aCUyMGNoYXJ0JTIwZGFzaGJvYXJkJTIwZGFyayUyMG1vZGUlMjBVSXxlbnwwfHx8fDE3ODU3MDExMTB8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Graphs of performance analytics on a dark laptop screen. Use in Hero section or System section."
+    },
+    {
+      "category": "Abstract Network / Tech Vibe",
+      "url": "https://images.unsplash.com/photo-1762279388956-1c098163a2a8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBnZW9tZXRyaWMlMjBnbG93aW5nJTIwYmx1ZSUyMGxpbmVzJTIwM2QlMjByZW5kZXJ8ZW58MHx8fHwxNzg1NzAxMTIwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Neon geometric lines forming a digital landscape. Use as background overlay or decorative element."
+    },
+    {
+      "category": "Target Audience - HVAC",
+      "url": "https://images.unsplash.com/photo-1660330589827-da8ab7dd3c02?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MDV8MHwxfHNlYXJjaHwxfHxIVkFDJTIwdGVjaG5pY2lhbiUyMHdvcmtpbmclMjBtb2Rlcm58ZW58MHx8fHwxNzg1NzAxMTEwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "HVAC technician working. Use in 'Who We Help' industry cards."
+    },
+    {
+      "category": "Target Audience - Contractor/Home Service",
+      "url": "https://images.unsplash.com/photo-1530983822321-fcac2d3c0f06?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwzfHxob21lJTIwc2VydmljZSUyMGNvbnRyYWN0b3IlMjBwb3J0cmFpdCUyMHNtaWxpbmd8ZW58MHx8fHwxNzg1NzAxMTIwfDA&ixlib=rb-4.1.0&q=85",
+      "description": "Smiling contractor. Use in Testimonials or 'Who We Help' segment."
+    }
+  ],
+  "accessibility": {
+    "contrast": "Ensure white text over #0B1020 has a minimum 7:1 ratio. Muted text (#64748B) must meet 4.5:1 ratio over deep backgrounds.",
+    "focus_states": "All inputs and buttons must have a high-contrast focus ring (focus:ring-2 focus:ring-blue-400 focus:outline-none).",
+    "motion": "Respect prefers-reduced-motion media query by disabling parallax and staggering for affected users.",
+    "testing": "All interactive elements (buttons, inputs, dropdowns) must include `data-testid`."
+  },
+  "instructions_to_main_agent": [
+    "Read the JSON payload thoroughly. Execute a strict dark-mode-first aesthetic with deep navy (#0B1020) and near-black (#050816) base colors.",
+    "Do not implement generic Vercel/Stripe looking components; push boundaries using Aceternity-inspired tracing beams and glassmorphism.",
+    "Implement Lenis for smooth scrolling and Framer Motion for the kinetic line-by-line hero reveal and scroll-triggered fade-ups.",
+    "Typography MUST be swapped from default Inter to Cabinet Grotesk (Heading), Manrope (Body), and JetBrains Mono (Code/Numbers).",
+    "Mobile-first responsive rule: Ensure complex bento grids start out as single columns on mobile devices to avoid overflow and cramping.",
+    "For the Contact page, implement a highly functional Booking Calendar using Shadcn Calendar combined with custom time-slot chips.",
+    "Images provided in `image_urls` must be utilized in their respective categories. Do not use placeholder images.",
+    "Ensure `data-testid` is added to all functional elements.",
+    "Avoid making completely transparent headers or overlays when content scrolls beneath."
+  ],
+  "universal_guidelines_for_main_agent": [
+    "Do not converge toward generic outputs. Avoid simplistic gradients and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy and glassmorphism.",
+    "Do not apply `transition: all`. Target specific properties like `transition-colors` or `transition-transform`.",
+    "Never center-align the app container (`.App { text-align: center; }`). Preserve natural reading flow.",
+    "Use 2-3x more spacing than typical defaults. Cramped designs look cheap.",
+    "Add hover states, transitions, and entrance animations to all interactive elements."
+  ]
+}
