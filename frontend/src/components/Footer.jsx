@@ -50,7 +50,10 @@ export default function Footer() {
       <div className="border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <p>&copy; {new Date().getFullYear()} Traction Labs. All rights reserved.</p>
-          <p className="font-mono">Built to convert visitors into booked calls.</p>
+          <div className="flex items-center gap-5">
+            <Link to="/login" className="hover:text-electric transition-colors" data-testid="footer-login">Team Login</Link>
+            <p className="font-mono">Built to convert visitors into booked calls.</p>
+          </div>
         </div>
       </div>
     </footer>
