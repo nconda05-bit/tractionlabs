@@ -60,6 +60,7 @@ function App() {
       <Toaster
         theme="dark"
         position="top-center"
+        offset={88}
         toastOptions={{
           style: { background: "#12182B", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" },
         }}
