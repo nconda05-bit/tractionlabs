@@ -51,3 +51,9 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 - Higgsfield AI ad visuals: per-ad "Generate image / video" in Ad Creator. Models: higgsfield-ai/soul/v2/standard (text2image), higgsfield-ai/dop/turbo (image2video). Endpoints POST/GET /api/ads/visual (background job). Verified 25/25 backend + E2E; account currently out of credits (graceful error shown).
 - Pending: Meta Ads live sync (needs user's Meta credentials).
 
+### Phase 4 (2026-08-02)
+- Creative Library: every generated image/video auto-saved (on success) to a searchable, client-filterable library (/dashboard/library). Endpoints GET/DELETE /api/creatives. Verified E2E.
+- Competitor Ad Intel: paste competitor ad copy and/or upload a screenshot (Claude vision) -> breakdown, strengths/weaknesses, how-to-win tactics, recommended copy, and a ready-to-use Higgsfield prompt for a better ad; one-click Generate saves to library. Endpoints POST /api/ads/analyze-competitor, GET/DELETE /api/ads/competitor-analyses. Verified 5/5 backend + E2E.
+- Higgsfield API is credit-metered (separate from web subscription); generation works once the API key's account has API credits.
+- Tech debt: server.py ~1000 lines — split into routers before major additions.
+
