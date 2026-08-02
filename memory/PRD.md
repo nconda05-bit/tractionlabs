@@ -43,7 +43,11 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 - Documents: Claude-generated Proposal/Contract/Invoice → branded PDF (xhtml2pdf, logo + line items + signature).
 
 ### Agency OS Backlog
-- P1: Live Meta Ads sync (spend/CPL/leads per client) feeding dashboard metrics.
+- P1: Meta Ads live sync (spend/CPL/leads per client) — playbook ready, awaiting user's Meta App ID/Secret + ads_read token + act_ ids.
 - P2: AI Sales Coach (call prep + transcript scoring), Ad Creator, Commercial/Video generator.
-- P2: Creative Library, SOP Library, Meeting Notes transcription, full template center, multi-user team logins.
+
+### Phase 3 (2026-08-02)
+- AI Sales Coach (call prep + transcript scoring), AI Ad Creator (full FB/IG campaigns), Client Portal + branded monthly reports (public /portal/:token), per-client metrics layer feeding dashboard "Ad Spend Managed" + "Leads Generated". Tested 21/21 backend + E2E.
+- Higgsfield AI ad visuals: per-ad "Generate image / video" in Ad Creator. Models: higgsfield-ai/soul/v2/standard (text2image), higgsfield-ai/dop/turbo (image2video). Endpoints POST/GET /api/ads/visual (background job). Verified 25/25 backend + E2E; account currently out of credits (graceful error shown).
+- Pending: Meta Ads live sync (needs user's Meta credentials).
 
