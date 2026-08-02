@@ -1,54 +1,69 @@
 import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import Lenis from "lenis";
+import { Toaster } from "sonner";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import Home from "@/pages/Home";
+import Services from "@/pages/Services";
+import Process from "@/pages/Process";
+import About from "@/pages/About";
+import Contact from "@/pages/Contact";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
+function ScrollToTop() {
+  const { pathname } = useLocation();
   useEffect(() => {
-    helloWorldApi();
-  }, []);
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+function SmoothScroll() {
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const lenis = new Lenis({ duration: 1.1, smoothWheel: true });
+    let raf;
+    const loop = (t) => {
+      lenis.raf(t);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      lenis.destroy();
+    };
+  }, []);
+  return null;
+}
 
 function App() {
   return (
     <div className="App">
+      <div className="grain" aria-hidden="true" />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
+        <SmoothScroll />
+        <ScrollToTop />
+        <Navbar />
+        <main className="relative z-10">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/process" element={<Process />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+          </Routes>
+        </main>
+        <Footer />
       </BrowserRouter>
+      <Toaster
+        theme="dark"
+        position="top-center"
+        toastOptions={{
+          style: { background: "#12182B", border: "1px solid rgba(255,255,255,0.08)", color: "#fff" },
+        }}
+      />
     </div>
   );
 }

@@ -12,7 +12,19 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
       },
+      fontFamily: {
+        heading: ['"Cabinet Grotesk"', 'system-ui', 'sans-serif'],
+        body: ['Manrope', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
       colors: {
+        navy: {
+          900: '#050816',
+          800: '#0B1020',
+          700: '#12182B',
+        },
+        electric: '#3B82F6',
+        coral: '#FF5A3C',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
@@ -70,11 +82,21 @@ module.exports = {
           to: {
             height: '0'
           }
+        },
+        marquee: {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-50%)' }
+        },
+        'pulse-glow': {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '1' }
         }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out'
+        'accordion-up': 'accordion-up 0.2s ease-out',
+        marquee: 'marquee 38s linear infinite',
+        'pulse-glow': 'pulse-glow 3s ease-in-out infinite'
       }
     }
   },
