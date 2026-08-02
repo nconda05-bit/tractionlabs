@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Save, Brain, FileText, ListTodo, Sparkles, Download, Trash2,
-  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink,
+  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink, Radar,
 } from "lucide-react";
 import api, { pdfUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AdCreator, SalesCoach, ClientReports } from "@/dashboard/ClientTools";
+import { AdCreator, SalesCoach, ClientReports, AdIntel } from "@/dashboard/ClientTools";
 
 const FIELDS = [
   ["business_name", "Business name"], ["contact_name", "Contact name"], ["email", "Email"],
@@ -109,6 +109,7 @@ export default function ClientDetail() {
           <TabsTrigger value="overview" data-testid="tab-overview"><ListTodo size={15} className="mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="brain" data-testid="tab-brain"><Brain size={15} className="mr-2" />AI Brain</TabsTrigger>
           <TabsTrigger value="ads" data-testid="tab-ads"><Megaphone size={15} className="mr-2" />Ad Creator</TabsTrigger>
+          <TabsTrigger value="intel" data-testid="tab-intel"><Radar size={15} className="mr-2" />Ad Intel</TabsTrigger>
           <TabsTrigger value="sales" data-testid="tab-sales"><PhoneCall size={15} className="mr-2" />Sales Coach</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><BarChart3 size={15} className="mr-2" />Reports</TabsTrigger>
           <TabsTrigger value="docs" data-testid="tab-docs"><FileText size={15} className="mr-2" />Documents</TabsTrigger>
@@ -182,6 +183,7 @@ export default function ClientDetail() {
 
         <TabsContent value="brain" className="mt-6"><ClientBrain client={client} reload={load} /></TabsContent>
         <TabsContent value="ads" className="mt-6"><AdCreator clientId={id} /></TabsContent>
+        <TabsContent value="intel" className="mt-6"><AdIntel clientId={id} /></TabsContent>
         <TabsContent value="sales" className="mt-6"><SalesCoach client={client} /></TabsContent>
         <TabsContent value="reports" className="mt-6"><ClientReports clientId={id} client={client} /></TabsContent>
         <TabsContent value="docs" className="mt-6"><ClientDocs clientId={id} docs={docs} reload={load} /></TabsContent>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Loader2, Sparkles, Megaphone, PhoneCall, BarChart3, Copy, Trash2, ExternalLink,
   Target, ShieldAlert, ThumbsDown, Trophy, Gauge, Image as ImageIcon, Video, AlertCircle,
+  Radar, Upload, Swords, Lightbulb,
 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -140,6 +141,130 @@ export function AdCreator({ clientId }) {
                 </div>
               </div>
               {d.notes && <p className="mt-4 text-sm text-slate-400 border-l-2 border-electric pl-4">{d.notes}</p>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============ COMPETITOR AD INTEL ============ */
+export function AdIntel({ clientId }) {
+  const [name, setName] = useState("");
+  const [text, setText] = useState("");
+  const [imageB64, setImageB64] = useState(null);
+  const [imgName, setImgName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState([]);
+
+  const load = async () => {
+    const { data } = await api.get(`/ads/competitor-analyses?client_id=${clientId}`);
+    setItems(data);
+  };
+  useEffect(() => { load(); }, [clientId]);
+
+  const onFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = String(reader.result);
+      setImageB64(res.includes(",") ? res.split(",")[1] : res);
+      setImgName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const analyze = async () => {
+    if (!text.trim() && !imageB64) return toast.error("Paste the competitor's ad or upload a screenshot");
+    setLoading(true);
+    try {
+      await api.post("/ads/analyze-competitor", { client_id: clientId, competitor_name: name, competitor_text: text, image_base64: imageB64 });
+      toast.success("Analysis complete");
+      setName(""); setText(""); setImageB64(null); setImgName("");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Analysis failed"); }
+    finally { setLoading(false); }
+  };
+
+  const remove = async (id) => { await api.delete(`/ads/competitor-analyses/${id}`); load(); };
+
+  return (
+    <div data-testid="ad-intel">
+      <div className="card-surface rounded-2xl p-6">
+        <div className="flex items-center gap-2 text-electric"><Radar size={18} /><h2 className="font-heading font-semibold text-lg">Competitor Ad Intel</h2></div>
+        <p className="mt-1 text-slate-400 text-sm">Paste a competitor's ad copy or upload a screenshot. Claude breaks down why it works, how to beat it, and writes a Higgsfield prompt for a stronger ad in your client's niche.</p>
+        <div className="mt-4 space-y-3">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Competitor name (optional)" className="bg-navy-900 border-white/10" data-testid="intel-name" />
+          <Textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste the competitor's headline, primary text, offer, CTA…" className="bg-navy-900 border-white/10 resize-none" data-testid="intel-text" />
+          <div className="flex items-center gap-3">
+            <label className="inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-sm text-slate-300 hover:border-electric/60 cursor-pointer transition-colors" data-testid="intel-upload">
+              <Upload size={15} /> {imgName || "Upload ad screenshot"}
+              <input type="file" accept="image/*" onChange={onFile} className="hidden" />
+            </label>
+            {imageB64 && <button onClick={() => { setImageB64(null); setImgName(""); }} className="text-xs text-slate-500 hover:text-coral">remove</button>}
+          </div>
+          <button onClick={analyze} disabled={loading} className="inline-flex items-center gap-2 rounded-full bg-electric px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60" data-testid="intel-analyze">
+            {loading ? <><Loader2 size={15} className="animate-spin" /> Analyzing competitor…</> : <><Swords size={15} /> Analyze & beat it</>}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-6">
+        {items.map((it) => {
+          const d = it.data || {};
+          const b = d.breakdown || {};
+          const rc = d.recommended_copy || {};
+          return (
+            <div key={it.id} className="card-surface rounded-2xl p-7" data-testid={`intel-${it.id}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-mono uppercase tracking-widest text-slate-500">Competitor</p>
+                  <h3 className="font-heading text-lg font-semibold">{it.competitor_name || "Unnamed competitor"}</h3>
+                </div>
+                <button onClick={() => remove(it.id)} className="text-slate-500 hover:text-coral"><Trash2 size={16} /></button>
+              </div>
+
+              <div className="mt-5 grid sm:grid-cols-2 gap-4">
+                <div className="rounded-xl bg-white/5 p-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-electric mb-2">Their breakdown</p>
+                  <ul className="space-y-1.5 text-sm text-slate-300">
+                    {b.hook && <li><span className="text-slate-500">Hook:</span> {b.hook}</li>}
+                    {b.offer && <li><span className="text-slate-500">Offer:</span> {b.offer}</li>}
+                    {b.angle && <li><span className="text-slate-500">Angle:</span> {b.angle}</li>}
+                    {b.cta && <li><span className="text-slate-500">CTA:</span> {b.cta}</li>}
+                    {(b.emotional_triggers || []).length > 0 && <li><span className="text-slate-500">Triggers:</span> {(b.emotional_triggers || []).join(", ")}</li>}
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-white/5 p-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2 flex items-center gap-1.5"><Swords size={13} /> How we win</p>
+                  <ul className="space-y-1.5 text-sm text-slate-300">
+                    {(d.how_to_win || []).map((w, i) => <li key={i} className="flex gap-2"><span className="text-electric">→</span>{w}</li>)}
+                  </ul>
+                </div>
+              </div>
+
+              {(rc.headline || rc.primary_text) && (
+                <div className="mt-4 rounded-xl border border-electric/25 bg-electric/5 p-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-electric mb-2 flex items-center gap-1.5"><Lightbulb size={13} /> Recommended ad copy</p>
+                  <p className="font-heading font-semibold">{rc.headline}</p>
+                  <p className="mt-1 text-sm text-slate-300 whitespace-pre-wrap">{rc.primary_text}</p>
+                  {rc.cta && <p className="mt-2 text-xs font-mono uppercase tracking-wider text-slate-400">CTA: {rc.cta}</p>}
+                  <button onClick={() => copy(`${rc.headline}\n\n${rc.primary_text}\n\nCTA: ${rc.cta || ""}`)} className="mt-2 inline-flex items-center gap-1.5 text-xs text-electric hover:text-blue-400"><Copy size={12} /> Copy copy</button>
+                </div>
+              )}
+
+              {d.higgsfield_prompt && (
+                <div className="mt-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2">Higgsfield prompt (better ad)</p>
+                  <p className="rounded-lg bg-navy-900 border border-white/10 p-3 text-sm text-slate-300 font-mono">{d.higgsfield_prompt}</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button onClick={() => copy(d.higgsfield_prompt)} className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"><Copy size={12} /> Copy prompt</button>
+                  </div>
+                  <AdVisual prompt={d.higgsfield_prompt} clientId={clientId} />
+                </div>
+              )}
             </div>
           );
         })}

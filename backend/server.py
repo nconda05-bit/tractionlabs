@@ -824,6 +824,67 @@ async def get_visual(job_id: str, user: dict = Depends(get_current_user)):
     return j
 
 
+# ==================== COMPETITOR AD INTEL ====================
+class CompetitorAnalyzeRequest(BaseModel):
+    client_id: str
+    competitor_text: Optional[str] = ""
+    image_base64: Optional[str] = None
+    competitor_name: Optional[str] = ""
+
+
+@api_router.post("/ads/analyze-competitor")
+async def analyze_competitor(payload: CompetitorAnalyzeRequest, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    if not payload.competitor_text and not payload.image_base64:
+        raise HTTPException(status_code=400, detail="Provide competitor ad text and/or an image to analyze.")
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are a paid-ads strategist. Analyze the competitor ad provided (text and/or the attached "
+                "image), then produce a plan to create a BETTER, more marketable ad for OUR client's niche. "
+                "Return JSON with keys: 'breakdown' {hook, offer, angle, cta, emotional_triggers (array)}, "
+                "'strengths' (array), 'weaknesses' (array), 'how_to_win' (array of specific tactics to beat it), "
+                "'recommended_copy' {headline, primary_text, cta}, "
+                "'higgsfield_prompt' (a single detailed, production-ready image-generation prompt describing the "
+                "visual for our client's better ad — subject, setting, style, colors, mood; NO text overlay)."
+            ),
+            prompt=(
+                f"OUR CLIENT: {c.get('business_name')} | industry={c.get('industry')} | "
+                f"services={c.get('services')} | cities={c.get('target_cities')} | offer/notes={c.get('notes')}\n\n"
+                f"COMPETITOR: {payload.competitor_name or 'Unknown'}\n"
+                f"COMPETITOR AD TEXT: {payload.competitor_text or '(see attached image)'}"
+            ),
+            session_id=f"competitor-{payload.client_id}",
+            image_b64=payload.image_base64,
+        )
+    except Exception as e:
+        logger.error(f"Competitor analysis failed: {e}")
+        raise HTTPException(status_code=502, detail="Competitor analysis failed. Please check the Claude API key and try again.")
+
+    doc = {
+        "id": str(uuid.uuid4()), "client_id": payload.client_id, "client_name": c.get("business_name"),
+        "competitor_name": payload.competitor_name or "", "competitor_text": payload.competitor_text or "",
+        "has_image": bool(payload.image_base64), "data": data, "created_at": now_iso(),
+    }
+    await db.competitor_analyses.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/ads/competitor-analyses")
+async def list_competitor_analyses(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"client_id": client_id} if client_id else {}
+    return await db.competitor_analyses.find(q, {"_id": 0}).sort("created_at", -1).to_list(300)
+
+
+@api_router.delete("/ads/competitor-analyses/{analysis_id}")
+async def delete_competitor_analysis(analysis_id: str, user: dict = Depends(get_current_user)):
+    await db.competitor_analyses.delete_one({"id": analysis_id})
+    return {"status": "deleted"}
+
+
 # ==================== CREATIVE LIBRARY ====================
 @api_router.get("/creatives")
 async def list_creatives(client_id: Optional[str] = None, q: Optional[str] = None,
