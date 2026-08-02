@@ -27,8 +27,23 @@ consultations. Primary CTA: "Book Your Free Growth Audit".
 - Fully tested (backend 100%, frontend E2E booking 100%).
 
 ## Backlog / Next
-- P1: Admin dashboard to view/manage leads (GET /api/bookings exists).
-- P1: Replace LEAD_NOTIFICATION_EMAIL placeholder (delivered@resend.dev) with real inbox.
+- P1: Live Meta Ads API integration + metrics dashboard (needs Nasir's Meta Business app credentials).
 - P2: Replace testimonial placeholders with real case studies.
 - P2: Confirmation email to the lead + calendar (.ics) invite.
-- P2: Blog/resources section for SEO.
+
+## Agency OS Dashboard — Phase 1 (2026-08-02)
+Private dashboard at /dashboard (login /login). Auth: JWT Bearer (single admin Nasir), seeded from env.
+AI = Claude (claude-sonnet-4-6) via Nasir's own Anthropic key (ANTHROPIC_API_KEY) + emergentintegrations.
+Implemented & tested (backend 12/12, frontend E2E 100%):
+- Home Dashboard: stats (MRR, active/onboarding clients, open tasks, new leads) + AI Briefing + Next Best Action + today's tasks.
+- Clients: workspaces + full CRM (edit), create/delete, status.
+- AI Client Brain: Claude analyzes client (findings + priority actions), history saved.
+- Onboarding Wizard: 3-step → Claude strategy → auto-creates client + task checklist.
+- AI COO chat: ranked answers over all client/task context, persisted history.
+- Documents: Claude-generated Proposal/Contract/Invoice → branded PDF (xhtml2pdf, logo + line items + signature).
+
+### Agency OS Backlog
+- P1: Live Meta Ads sync (spend/CPL/leads per client) feeding dashboard metrics.
+- P2: AI Sales Coach (call prep + transcript scoring), Ad Creator, Commercial/Video generator.
+- P2: Creative Library, SOP Library, Meeting Notes transcription, full template center, multi-user team logins.
+
