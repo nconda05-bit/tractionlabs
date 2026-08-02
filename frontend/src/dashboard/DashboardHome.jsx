@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Users, UserPlus, ListTodo, DollarSign, Inbox, Sparkles, Loader2, CheckCircle2, Zap, ArrowRight,
+  Wallet, Target,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -10,10 +11,12 @@ import { toast } from "sonner";
 
 const STAT_CARDS = [
   { key: "mrr", label: "Monthly Recurring", icon: DollarSign, fmt: (v) => `$${(v || 0).toLocaleString()}`, accent: "text-electric" },
+  { key: "ad_spend", label: "Ad Spend Managed", icon: Wallet, fmt: (v) => `$${(v || 0).toLocaleString()}`, accent: "text-white" },
+  { key: "leads_generated", label: "Leads Generated", icon: Target, accent: "text-emerald-400" },
   { key: "active_clients", label: "Active Clients", icon: Users, accent: "text-white" },
   { key: "onboarding_clients", label: "Onboarding", icon: UserPlus, accent: "text-white" },
   { key: "open_tasks", label: "Open Tasks", icon: ListTodo, accent: "text-white" },
-  { key: "new_leads", label: "New Leads", icon: Inbox, accent: "text-coral" },
+  { key: "new_leads", label: "New Web Leads", icon: Inbox, accent: "text-coral" },
 ];
 
 export default function DashboardHome() {
@@ -58,7 +61,7 @@ export default function DashboardHome() {
       </div>
 
       {/* Stat cards */}
-      <div className="mt-8 grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {STAT_CARDS.map((c, i) => {
           const Icon = c.icon;
           const val = c.fmt ? c.fmt(stats[c.key]) : stats[c.key] ?? "—";

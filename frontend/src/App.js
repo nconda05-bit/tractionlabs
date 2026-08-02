@@ -20,6 +20,7 @@ import ClientDetail from "@/dashboard/ClientDetail";
 import Onboarding from "@/dashboard/Onboarding";
 import AICoo from "@/dashboard/AICoo";
 import Documents from "@/dashboard/Documents";
+import Portal from "@/dashboard/Portal";
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -64,6 +65,7 @@ function App() {
             </Route>
 
             <Route path="/login" element={<Login />} />
+            <Route path="/portal/:token" element={<Portal />} />
 
             <Route
               path="/dashboard"

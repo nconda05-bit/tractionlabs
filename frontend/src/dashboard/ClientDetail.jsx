@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Save, Brain, FileText, ListTodo, Sparkles, Download, Trash2,
-  Plus, CheckCircle2, Circle, AlertTriangle,
+  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink,
 } from "lucide-react";
 import api, { pdfUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AdCreator, SalesCoach, ClientReports } from "@/dashboard/ClientTools";
 
 const FIELDS = [
   ["business_name", "Business name"], ["contact_name", "Contact name"], ["email", "Email"],
@@ -66,6 +67,22 @@ export default function ClientDetail() {
     navigate("/dashboard/clients");
   };
 
+  const setMetric = (k, v) => setClient((c) => ({ ...c, metrics: { ...(c.metrics || {}), [k]: v } }));
+  const saveMetrics = async () => {
+    const m = client.metrics || {};
+    try {
+      await api.put(`/clients/${id}/metrics`, {
+        spend: parseFloat(m.spend) || 0,
+        leads: parseInt(m.leads) || 0,
+        appointments: parseInt(m.appointments) || 0,
+        revenue: parseFloat(m.revenue) || 0,
+        period: m.period || "",
+      });
+      toast.success("Metrics updated");
+      load();
+    } catch { toast.error("Could not save metrics"); }
+  };
+
   return (
     <div data-testid="client-detail">
       <Link to="/dashboard/clients" className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors" data-testid="back-to-clients">
@@ -88,9 +105,12 @@ export default function ClientDetail() {
       </div>
 
       <Tabs defaultValue="overview" className="mt-8">
-        <TabsList className="bg-navy-800 border border-white/5">
+        <TabsList className="bg-navy-800 border border-white/5 flex-wrap h-auto">
           <TabsTrigger value="overview" data-testid="tab-overview"><ListTodo size={15} className="mr-2" />CRM</TabsTrigger>
           <TabsTrigger value="brain" data-testid="tab-brain"><Brain size={15} className="mr-2" />AI Brain</TabsTrigger>
+          <TabsTrigger value="ads" data-testid="tab-ads"><Megaphone size={15} className="mr-2" />Ad Creator</TabsTrigger>
+          <TabsTrigger value="sales" data-testid="tab-sales"><PhoneCall size={15} className="mr-2" />Sales Coach</TabsTrigger>
+          <TabsTrigger value="reports" data-testid="tab-reports"><BarChart3 size={15} className="mr-2" />Reports</TabsTrigger>
           <TabsTrigger value="docs" data-testid="tab-docs"><FileText size={15} className="mr-2" />Documents</TabsTrigger>
           <TabsTrigger value="tasks" data-testid="tab-tasks"><CheckCircle2 size={15} className="mr-2" />Tasks</TabsTrigger>
         </TabsList>
@@ -135,9 +155,35 @@ export default function ClientDetail() {
               {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save changes
             </button>
           </div>
+
+          <div className="card-surface rounded-2xl p-7 mt-6" data-testid="metrics-editor">
+            <div className="flex items-center gap-2 text-electric">
+              <BarChart3 size={18} /><h3 className="font-heading font-semibold text-lg">Performance metrics</h3>
+            </div>
+            <p className="mt-1 text-slate-400 text-sm">Enter this period's numbers (Meta sync will auto-fill these once connected). Cost-per-lead is calculated for you.</p>
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[["spend", "Ad spend ($)"], ["leads", "Leads"], ["appointments", "Appointments"], ["revenue", "Revenue ($)"]].map(([k, label]) => (
+                <div key={k} className="space-y-2">
+                  <Label className="text-slate-300 text-sm">{label}</Label>
+                  <Input type="number" value={(client.metrics || {})[k] ?? ""} onChange={(e) => setMetric(k, e.target.value)} className="bg-navy-900 border-white/10" data-testid={`metric-${k}`} />
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex items-center gap-4">
+              <button onClick={saveMetrics} className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/15" data-testid="save-metrics">
+                <Save size={15} /> Save metrics
+              </button>
+              {(client.metrics || {}).cpl != null && (client.metrics || {}).leads > 0 && (
+                <span className="text-sm text-slate-400">Cost / lead: <span className="text-electric font-semibold">${(client.metrics || {}).cpl}</span></span>
+              )}
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="brain" className="mt-6"><ClientBrain client={client} reload={load} /></TabsContent>
+        <TabsContent value="ads" className="mt-6"><AdCreator clientId={id} /></TabsContent>
+        <TabsContent value="sales" className="mt-6"><SalesCoach client={client} /></TabsContent>
+        <TabsContent value="reports" className="mt-6"><ClientReports clientId={id} client={client} /></TabsContent>
         <TabsContent value="docs" className="mt-6"><ClientDocs clientId={id} docs={docs} reload={load} /></TabsContent>
         <TabsContent value="tasks" className="mt-6"><ClientTasks clientId={id} tasks={tasks} reload={load} /></TabsContent>
       </Tabs>

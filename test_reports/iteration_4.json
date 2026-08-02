@@ -1,0 +1,30 @@
+{
+  "summary": "Phase 2 end-to-end testing (Metrics, AI Sales Coach, AI Ad Creator, Client Portal & Reports). 9 new pytest cases added to backend_test.py — all 9 pass (100%). Full frontend E2E via Playwright on the demo TEST_E2E_HVAC client passed every step: metrics editor computes CPL=$40 (1000/25) after save, /api/dashboard aggregates ad_spend ($1,200) and leads_generated (30) into the stat cards, Ad Creator generates a Claude campaign card with hooks/headlines/CTA, Sales Coach prep-result renders, Sales Coach score-run returns a numeric score + closing_probability, Reports tab generates a report row and clicking View opens /portal/<share_token> which renders the branded report headline + narrative WITHOUT any auth token in a fresh browser page. Public portal 404s on invalid token; all new auth-protected endpoints correctly return 401 without a Bearer token.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 884 lines — past the 700-line threshold. Split into routers (auth, clients, ai, docs, sales, ads, reports, portal) before adding Meta/Higgsfield code.",
+    "MetricsUpdate.leads is Optional[int]=0 but line 651 does `spend/leads` — the truthiness guard prevents ZeroDivisionError today, but if leads is ever passed as None from a partial payload the current expression `m['leads']` in the divisor would still work only because of the guard; keep the guard when refactoring.",
+    "share_token uses uuid4().hex (128-bit) which is unguessable, good. Consider adding a DB unique index on reports.share_token to guarantee uniqueness and speed up the public portal lookup.",
+    "Ad campaign `session_id=f\"ads-{client_id}\"` is reused across all generations for a client — Claude history in emergentintegrations will keep growing per client. Consider per-generation session_ids or explicit history truncation.",
+    "Public /api/portal/{share_token} has no rate limiting — trivial to brute-force scan tokens (although 128-bit space makes it impractical). Add basic per-IP throttling before wide sharing.",
+    "SalesScoreRequest.transcript truncated to 12000 chars silently — add a client-side length warning or explicit 413 response when transcript is longer.",
+    "startup uses deprecated @app.on_event (also flagged last iteration) — migrate to lifespan handler."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/iteration_4.json"
+  ],
+  "success_rate": {"backend": "100% (21/21 total, 9/9 new Phase 2)", "frontend": "100% (metrics editor, Ad Creator, Sales Coach prep & score, Reports + public portal, dashboard aggregates)"},
+  "test_credentials": "nasir@tractionlabs.com / TractionLabs2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Test run left one report on TEST_E2E_HVAC (share_token can be viewed at /portal/<token> — visible on Reports tab). Backend pytest created & cleaned up its own TEST_Phase2Co client.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 2 is fully functional. Pytest must be run with `-n 0` to avoid xdist read-timeouts on the preview backend when AI endpoints run in parallel (or leave the default -n 2 but expect occasional 15s read timeouts). Full command: `pytest backend/tests/backend_test.py -v -n 0`. Demo client id ed236514-80b5-4314-8f42-b5005dd733e2 (TEST_E2E_HVAC) has metrics + at least one ad campaign + report saved. Public portal path is /portal/<share_token>. Meta Ads sync + Higgsfield video are NOT implemented yet (per user note).",
+  "rca of the issue": "N/A — no issues found."
+}

@@ -187,3 +187,158 @@ class TestAICoo:
         r = requests.get(f"{API}/ai/coo/history", headers=auth, timeout=15)
         assert r.status_code == 200
         assert isinstance(r.json().get("messages"), list)
+
+
+
+# ==================== PHASE 2 ====================
+@pytest.fixture(scope="module")
+def phase2_client(auth):
+    r = requests.post(f"{API}/clients", headers=auth, json={
+        "business_name": "TEST_Phase2Co", "industry": "hvac", "monthly_fee": 1500,
+        "website": "https://example.com", "notes": "Meta ads",
+        "target_cities": ["Austin"], "services": ["Meta Ads"], "budget": "$2000",
+    }, timeout=15)
+    assert r.status_code == 200
+    cid = r.json()["id"]
+    yield cid
+    requests.delete(f"{API}/clients/{cid}", headers=auth, timeout=15)
+
+
+class TestMetrics:
+    def test_metrics_requires_auth(self, phase2_client):
+        r = requests.put(f"{API}/clients/{phase2_client}/metrics",
+                         json={"spend": 100, "leads": 5}, timeout=15)
+        assert r.status_code == 401
+
+    def test_update_metrics_cpl_and_dashboard(self, auth, phase2_client):
+        payload = {"spend": 1000, "leads": 25, "appointments": 10, "revenue": 5000, "period": "2026-01"}
+        r = requests.put(f"{API}/clients/{phase2_client}/metrics", headers=auth, json=payload, timeout=15)
+        assert r.status_code == 200, r.text
+        c = r.json()
+        assert c["metrics"]["cpl"] == 40.0  # 1000/25
+        assert c["metrics"]["spend"] == 1000
+        assert c["metrics"]["leads"] == 25
+
+        # zero-leads guard
+        r = requests.put(f"{API}/clients/{phase2_client}/metrics", headers=auth,
+                         json={"spend": 500, "leads": 0}, timeout=15)
+        assert r.status_code == 200
+        assert r.json()["metrics"]["cpl"] == 0
+
+        # restore + verify dashboard aggregates
+        requests.put(f"{API}/clients/{phase2_client}/metrics", headers=auth, json=payload, timeout=15)
+        r = requests.get(f"{API}/dashboard", headers=auth, timeout=15)
+        d = r.json()
+        assert "ad_spend" in d["stats"] and "leads_generated" in d["stats"]
+        assert d["stats"]["ad_spend"] >= 1000
+        assert d["stats"]["leads_generated"] >= 25
+
+
+class TestSalesCoach:
+    def test_prep_requires_auth(self):
+        r = requests.post(f"{API}/sales/prep", json={"business_name": "X"}, timeout=15)
+        assert r.status_code == 401
+
+    def test_sales_prep(self, auth):
+        r = requests.post(f"{API}/sales/prep", headers=auth, json={
+            "business_name": "TEST_ACME HVAC", "industry": "hvac",
+            "context": "Owner wants more AC install leads; $3k/mo budget."
+        }, timeout=90)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        for k in ("mindset", "talking_points", "objections", "avoid", "close"):
+            assert k in d, f"missing {k}"
+        assert isinstance(d["talking_points"], list) and len(d["talking_points"]) > 0
+        assert isinstance(d["objections"], list) and len(d["objections"]) > 0
+        first = d["objections"][0]
+        assert "objection" in first and "response" in first
+
+    def test_sales_score(self, auth):
+        transcript = (
+            "Rep: Hi John, thanks for hopping on. Tell me about your business.\n"
+            "John: We do HVAC install and repair in Austin. Leads are down.\n"
+            "Rep: Got it. What's your current cost per lead?\n"
+            "John: Around $120, too high.\n"
+            "Rep: We can typically cut that in half in 60 days. Are you open to a 3-month trial?\n"
+            "John: How much?\n"
+            "Rep: $1500/mo plus ad spend.\n"
+            "John: Let me think about it.\n"
+        )
+        r = requests.post(f"{API}/sales/score", headers=auth, json={
+            "business_name": "TEST_ACME HVAC", "transcript": transcript
+        }, timeout=90)
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert isinstance(d.get("score"), int)
+        assert isinstance(d.get("closing_probability"), int)
+        for k in ("strengths", "objections", "mistakes", "better_responses", "summary"):
+            assert k in d
+
+
+class TestAdCreator:
+    def test_ads_requires_auth(self, phase2_client):
+        r = requests.post(f"{API}/ads/create", json={"client_id": phase2_client}, timeout=15)
+        assert r.status_code == 401
+
+    def test_ad_create_list_delete(self, auth, phase2_client):
+        r = requests.post(f"{API}/ads/create", headers=auth,
+                         json={"client_id": phase2_client}, timeout=120)
+        assert r.status_code == 200, r.text
+        doc = r.json()
+        assert doc["client_id"] == phase2_client
+        data = doc["data"]
+        assert "campaign_name" in data and "audiences" in data and "ads" in data
+        assert isinstance(data["ads"], list) and len(data["ads"]) >= 1
+        ad = data["ads"][0]
+        for k in ("hook", "headline", "primary_text", "cta"):
+            assert k in ad
+        ad_id = doc["id"]
+
+        r = requests.get(f"{API}/ads", headers=auth, params={"client_id": phase2_client}, timeout=15)
+        assert r.status_code == 200 and any(x["id"] == ad_id for x in r.json())
+
+        r = requests.delete(f"{API}/ads/{ad_id}", headers=auth, timeout=15)
+        assert r.status_code == 200
+
+
+class TestReportsAndPortal:
+    def test_report_requires_auth(self, phase2_client):
+        r = requests.post(f"{API}/reports/generate", json={"client_id": phase2_client}, timeout=15)
+        assert r.status_code == 401
+
+    def test_generate_report_and_public_portal(self, auth, phase2_client):
+        # ensure metrics exist
+        requests.put(f"{API}/clients/{phase2_client}/metrics", headers=auth, json={
+            "spend": 1000, "leads": 25, "appointments": 10, "revenue": 5000, "period": "2026-01"
+        }, timeout=15)
+
+        r = requests.post(f"{API}/reports/generate", headers=auth,
+                         json={"client_id": phase2_client, "period": "January 2026"}, timeout=120)
+        assert r.status_code == 200, r.text
+        report = r.json()
+        assert report["share_token"] and len(report["share_token"]) > 10
+        assert report["metrics"]["spend"] == 1000
+        assert report["metrics"]["leads"] == 25
+        content = report["content"]
+        for k in ("headline", "summary", "wins", "metrics_narrative", "next_month"):
+            assert k in content
+
+        token = report["share_token"]
+
+        # list
+        r = requests.get(f"{API}/reports", headers=auth, timeout=15)
+        assert r.status_code == 200 and any(x["id"] == report["id"] for x in r.json())
+
+        # PUBLIC portal - NO auth header
+        r = requests.get(f"{API}/portal/{token}", timeout=15)
+        assert r.status_code == 200, r.text
+        pub = r.json()
+        assert pub["share_token"] == token
+        assert pub["content"]["headline"]
+
+        # invalid token
+        r = requests.get(f"{API}/portal/nonexistent_token_xyz", timeout=15)
+        assert r.status_code == 404
+
+        # cleanup
+        requests.delete(f"{API}/reports/{report['id']}", headers=auth, timeout=15)

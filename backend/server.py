@@ -357,12 +357,16 @@ async def dashboard(user: dict = Depends(get_current_user)):
     mrr = sum(float(c.get("monthly_fee") or 0) for c in active)
     tasks_today = [t for t in tasks if (t.get("due_date") or "")[:10] <= today]
     new_leads = await db.bookings.count_documents({"status": "new"})
+    ad_spend = sum(float((c.get("metrics") or {}).get("spend") or 0) for c in clients)
+    leads_generated = sum(int((c.get("metrics") or {}).get("leads") or 0) for c in clients)
     return {
         "stats": {
             "active_clients": len(active),
             "onboarding_clients": len(onboarding),
             "total_clients": len(clients),
             "mrr": round(mrr, 2),
+            "ad_spend": round(ad_spend, 2),
+            "leads_generated": leads_generated,
             "open_tasks": len(tasks),
             "tasks_today": len(tasks_today),
             "new_leads": new_leads,
@@ -630,6 +634,216 @@ async def document_pdf(doc_id: str, token: Optional[str] = None, request: Reques
     filename = f"{d.get('type','document')}-{(d.get('client_snapshot') or {}).get('business_name','client')}.pdf".replace(" ", "_")
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf",
                              headers={"Content-Disposition": f'inline; filename="{filename}"'})
+
+
+# ==================== METRICS (manual now, Meta sync later) ====================
+class MetricsUpdate(BaseModel):
+    spend: Optional[float] = 0
+    leads: Optional[int] = 0
+    appointments: Optional[int] = 0
+    revenue: Optional[float] = 0
+    period: Optional[str] = ""  # e.g. "2026-08"
+
+
+@api_router.put("/clients/{client_id}/metrics")
+async def update_metrics(client_id: str, payload: MetricsUpdate, user: dict = Depends(get_current_user)):
+    m = payload.model_dump()
+    m["cpl"] = round((m.get("spend") or 0) / m["leads"], 2) if m.get("leads") else 0
+    m["updated_at"] = now_iso()
+    await db.clients.update_one({"id": client_id}, {"$set": {"metrics": m}})
+    c = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return c
+
+
+# ==================== AI SALES COACH ====================
+class SalesPrepRequest(BaseModel):
+    prospect_name: Optional[str] = ""
+    business_name: str
+    industry: Optional[str] = ""
+    context: Optional[str] = ""  # notes about the prospect / prior spend etc.
+
+
+class SalesScoreRequest(BaseModel):
+    business_name: Optional[str] = ""
+    transcript: str
+
+
+@api_router.post("/sales/prep")
+async def sales_prep(payload: SalesPrepRequest, user: dict = Depends(get_current_user)):
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are a sales coach preparing the owner for a discovery/sales call with a local service "
+                "business owner. Return JSON with keys: 'mindset' (1 sentence on the prospect's likely "
+                "mindset/concerns), 'talking_points' (array of 3-5 short strings), 'objections' (array of "
+                "{objection, response}), 'avoid' (array of 2-3 short things NOT to say), "
+                "'close' (1-2 sentence recommended closing approach)."
+            ),
+            prompt=(
+                f"Prospect: {payload.prospect_name} at {payload.business_name} "
+                f"({payload.industry}). Context: {payload.context or 'No extra context.'}"
+            ),
+            session_id="sales-prep",
+        )
+    except Exception as e:
+        logger.error(f"Sales prep failed: {e}")
+        raise HTTPException(status_code=502, detail="Sales prep failed. Please check the Claude API key and try again.")
+    doc = {"id": str(uuid.uuid4()), "type": "prep", "business_name": payload.business_name,
+           "data": data, "created_at": now_iso()}
+    await db.sales_sessions.insert_one({**doc})
+    return data
+
+
+@api_router.post("/sales/score")
+async def sales_score(payload: SalesScoreRequest, user: dict = Depends(get_current_user)):
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are a sales manager reviewing a sales call transcript. Return JSON with keys: "
+                "'score' (0-100 integer overall), 'closing_probability' (0-100 integer), "
+                "'strengths' (array of short strings), 'objections' (array of strings the prospect raised), "
+                "'mistakes' (array of short strings), 'better_responses' (array of {situation, better_response}), "
+                "'summary' (2-3 sentences)."
+            ),
+            prompt=f"Transcript:\n{payload.transcript[:12000]}",
+            session_id="sales-score",
+        )
+    except Exception as e:
+        logger.error(f"Sales score failed: {e}")
+        raise HTTPException(status_code=502, detail="Call scoring failed. Please check the Claude API key and try again.")
+    doc = {"id": str(uuid.uuid4()), "type": "score", "business_name": payload.business_name,
+           "data": data, "created_at": now_iso()}
+    await db.sales_sessions.insert_one({**doc})
+    return data
+
+
+@api_router.get("/sales/sessions")
+async def sales_sessions(user: dict = Depends(get_current_user)):
+    return await db.sales_sessions.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+# ==================== AD CREATOR ====================
+class AdCreateRequest(BaseModel):
+    client_id: str
+    prompt: Optional[str] = ""  # optional extra direction
+
+
+@api_router.post("/ads/create")
+async def create_ad_campaign(payload: AdCreateRequest, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are a performance marketer building a Facebook/Instagram lead-gen campaign for a local "
+                "service business. Return JSON with keys: 'campaign_name', 'objective' (e.g. Lead Generation), "
+                "'daily_budget' (string with $), 'audiences' (array of {name, targeting}), "
+                "'ad_sets' (array of short strings describing ad set structure), "
+                "'ads' (array of 3-4 objects {hook, headline, primary_text, cta, image_prompt}), "
+                "'notes' (1-2 sentences on tracking/optimization)."
+            ),
+            prompt=(
+                f"Client: {c.get('business_name')} | industry={c.get('industry')} | "
+                f"cities={c.get('target_cities')} | services={c.get('services')} | budget={c.get('budget')} | "
+                f"offer/notes={c.get('notes')}\nExtra direction: {payload.prompt or 'none'}"
+            ),
+            session_id=f"ads-{payload.client_id}",
+        )
+    except Exception as e:
+        logger.error(f"Ad create failed: {e}")
+        raise HTTPException(status_code=502, detail="Ad generation failed. Please check the Claude API key and try again.")
+    doc = {"id": str(uuid.uuid4()), "client_id": payload.client_id,
+           "client_name": c.get("business_name"), "data": data, "created_at": now_iso()}
+    await db.ad_campaigns.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/ads")
+async def list_ad_campaigns(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"client_id": client_id} if client_id else {}
+    return await db.ad_campaigns.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.delete("/ads/{ad_id}")
+async def delete_ad_campaign(ad_id: str, user: dict = Depends(get_current_user)):
+    await db.ad_campaigns.delete_one({"id": ad_id})
+    return {"status": "deleted"}
+
+
+# ==================== CLIENT PORTAL & REPORTS ====================
+class ReportRequest(BaseModel):
+    client_id: str
+    period: Optional[str] = ""  # e.g. "August 2026"
+
+
+@api_router.post("/reports/generate")
+async def generate_report(payload: ReportRequest, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    metrics = c.get("metrics") or {}
+    period = payload.period or datetime.now(timezone.utc).strftime("%B %Y")
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are writing a client-facing monthly performance report for a local service business. "
+                "Be professional, positive but honest, and never invent numbers beyond those provided. "
+                "Return JSON with keys: 'headline' (1 short line), 'summary' (2-3 sentences), "
+                "'wins' (array of 3-4 short strings), 'metrics_narrative' (1-2 sentences interpreting the "
+                "numbers provided), 'next_month' (array of 3-4 short focus strings)."
+            ),
+            prompt=(
+                f"Client: {c.get('business_name')} ({c.get('industry')}). Period: {period}.\n"
+                f"Metrics provided: spend=${metrics.get('spend',0)}, leads={metrics.get('leads',0)}, "
+                f"cost_per_lead=${metrics.get('cpl',0)}, appointments={metrics.get('appointments',0)}, "
+                f"revenue=${metrics.get('revenue',0)}. Goals/notes: {c.get('notes')}"
+            ),
+            session_id=f"report-{payload.client_id}",
+        )
+    except Exception as e:
+        logger.error(f"Report failed: {e}")
+        raise HTTPException(status_code=502, detail="Report generation failed. Please check the Claude API key and try again.")
+    report = {
+        "id": str(uuid.uuid4()),
+        "client_id": payload.client_id,
+        "client_name": c.get("business_name"),
+        "industry": c.get("industry"),
+        "period": period,
+        "metrics": {"spend": metrics.get("spend", 0), "leads": metrics.get("leads", 0),
+                    "cpl": metrics.get("cpl", 0), "appointments": metrics.get("appointments", 0),
+                    "revenue": metrics.get("revenue", 0)},
+        "content": data,
+        "share_token": uuid.uuid4().hex,
+        "created_at": now_iso(),
+    }
+    await db.reports.insert_one({**report})
+    report.pop("_id", None)
+    return report
+
+
+@api_router.get("/reports")
+async def list_reports(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"client_id": client_id} if client_id else {}
+    return await db.reports.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.delete("/reports/{report_id}")
+async def delete_report(report_id: str, user: dict = Depends(get_current_user)):
+    await db.reports.delete_one({"id": report_id})
+    return {"status": "deleted"}
+
+
+@api_router.get("/portal/{share_token}")
+async def portal_report(share_token: str):
+    """PUBLIC endpoint — clients view their branded report via share link (no auth)."""
+    r = await db.reports.find_one({"share_token": share_token}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return r
 
 
 # ==================== APP WIRING ====================
