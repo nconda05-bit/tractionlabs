@@ -57,3 +57,6 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 - Higgsfield API is credit-metered (separate from web subscription); generation works once the API key's account has API credits.
 - Tech debt: server.py ~1000 lines — split into routers before major additions.
 
+### Phase 5 (2026-08-02)
+- Winning Angle Tracker: track competitor "how to win" tactics per client (status Testing/Reused/Won), shown in a Winning Angles panel in the Ad Intel tab. Endpoints POST/GET/PUT/DELETE /api/angles. Proven angles are injected as context into Ad Creator + Competitor Ad Intel prompts so the AI leans into what works per niche. Verified 4/4 backend + E2E.
+
