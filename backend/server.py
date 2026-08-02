@@ -780,12 +780,20 @@ class VisualRequest(BaseModel):
     prompt: str
     kind: str = "image"  # image | video
     aspect_ratio: Optional[str] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
 
 
-async def run_visual_job(job_id: str, kind: str, prompt: str, aspect_ratio: str):
+async def run_visual_job(job_id: str, kind: str, prompt: str, aspect_ratio: str,
+                         client_id: Optional[str] = None, client_name: Optional[str] = None):
     try:
         url = await higgsfield_service.generate_media(kind, prompt, aspect_ratio)
         await db.media_jobs.update_one({"id": job_id}, {"$set": {"status": "completed", "media_url": url}})
+        # Save to the searchable creative library
+        await db.creatives.insert_one({
+            "id": str(uuid.uuid4()), "client_id": client_id, "client_name": client_name,
+            "kind": kind, "prompt": prompt, "media_url": url, "created_at": now_iso(),
+        })
     except Exception as e:
         await db.media_jobs.update_one({"id": job_id}, {"$set": {"status": "failed", "error": str(e)[:300]}})
 
@@ -795,10 +803,15 @@ async def create_visual(payload: VisualRequest, background_tasks: BackgroundTask
                         user: dict = Depends(get_current_user)):
     kind = "video" if payload.kind == "video" else "image"
     ar = payload.aspect_ratio or ("9:16" if kind == "video" else "3:4")
+    client_name = payload.client_name
+    if payload.client_id and not client_name:
+        c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0, "business_name": 1})
+        client_name = (c or {}).get("business_name")
     job = {"id": str(uuid.uuid4()), "status": "queued", "kind": kind, "prompt": payload.prompt,
            "media_url": None, "error": None, "created_at": now_iso()}
     await db.media_jobs.insert_one({**job})
-    background_tasks.add_task(run_visual_job, job["id"], kind, payload.prompt, ar)
+    background_tasks.add_task(run_visual_job, job["id"], kind, payload.prompt, ar,
+                              payload.client_id, client_name)
     job.pop("_id", None)
     return job
 
@@ -809,6 +822,26 @@ async def get_visual(job_id: str, user: dict = Depends(get_current_user)):
     if not j:
         raise HTTPException(status_code=404, detail="Job not found")
     return j
+
+
+# ==================== CREATIVE LIBRARY ====================
+@api_router.get("/creatives")
+async def list_creatives(client_id: Optional[str] = None, q: Optional[str] = None,
+                         kind: Optional[str] = None, user: dict = Depends(get_current_user)):
+    query = {}
+    if client_id:
+        query["client_id"] = client_id
+    if kind in ("image", "video"):
+        query["kind"] = kind
+    if q:
+        query["prompt"] = {"$regex": q, "$options": "i"}
+    return await db.creatives.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.delete("/creatives/{creative_id}")
+async def delete_creative(creative_id: str, user: dict = Depends(get_current_user)):
+    await db.creatives.delete_one({"id": creative_id})
+    return {"status": "deleted"}
 
 
 # ==================== CLIENT PORTAL & REPORTS ====================

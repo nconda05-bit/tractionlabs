@@ -20,6 +20,7 @@ import ClientDetail from "@/dashboard/ClientDetail";
 import Onboarding from "@/dashboard/Onboarding";
 import AICoo from "@/dashboard/AICoo";
 import Documents from "@/dashboard/Documents";
+import CreativeLibrary from "@/dashboard/CreativeLibrary";
 import Portal from "@/dashboard/Portal";
 
 function ScrollToTop() {
@@ -76,6 +77,7 @@ function App() {
               <Route path="clients/:id" element={<ClientDetail />} />
               <Route path="onboard" element={<Onboarding />} />
               <Route path="coo" element={<AICoo />} />
+              <Route path="library" element={<CreativeLibrary />} />
               <Route path="documents" element={<Documents />} />
             </Route>
           </Routes>

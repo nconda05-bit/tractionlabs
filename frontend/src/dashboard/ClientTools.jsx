@@ -13,7 +13,7 @@ const copy = (text) => { navigator.clipboard?.writeText(text); toast.success("Co
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ============ AD VISUAL (Higgsfield) ============ */
-function AdVisual({ prompt }) {
+function AdVisual({ prompt, clientId }) {
   const [status, setStatus] = useState("idle"); // idle | working | done | error
   const [url, setUrl] = useState(null);
   const [mediaKind, setMediaKind] = useState("image");
@@ -22,7 +22,7 @@ function AdVisual({ prompt }) {
   const run = async (kind) => {
     setStatus("working"); setUrl(null); setErr(""); setMediaKind(kind);
     try {
-      const { data } = await api.post("/ads/visual", { prompt, kind });
+      const { data } = await api.post("/ads/visual", { prompt, kind, client_id: clientId });
       for (let i = 0; i < 120; i++) {
         await sleep(2500);
         const { data: job } = await api.get(`/ads/visual/${data.id}`);
@@ -134,7 +134,7 @@ export function AdCreator({ clientId }) {
                         <button onClick={() => copy(`${ad.headline}\n\n${ad.primary_text}\n\nCTA: ${ad.cta}`)} className="text-slate-500 hover:text-electric opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs"><Copy size={13} /> Copy</button>
                       </div>
                       {ad.image_prompt && <p className="mt-2 text-xs text-slate-500 italic">Visual: {ad.image_prompt}</p>}
-                      <AdVisual prompt={ad.image_prompt || `${ad.headline}. ${ad.primary_text}`} />
+                      <AdVisual prompt={ad.image_prompt || `${ad.headline}. ${ad.primary_text}`} clientId={clientId} />
                     </div>
                   ))}
                 </div>
