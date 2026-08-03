@@ -60,7 +60,26 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 ### Phase 5 (2026-08-02)
 - Winning Angle Tracker: track competitor "how to win" tactics per client (status Testing/Reused/Won), shown in a Winning Angles panel in the Ad Intel tab. Endpoints POST/GET/PUT/DELETE /api/angles. Proven angles are injected as context into Ad Creator + Competitor Ad Intel prompts so the AI leans into what works per niche. Verified 4/4 backend + E2E.
 
-### Phase 6 — Batch Spy (2026-08-03)
+### Phase 7 — Interconnected 12-Agent Intelligence System (2026-08-03)
+- **Campaign Engine** tab inside every Client workspace. 12 agents chained in 3 layers with each layer consuming the previous:
+  - Layer 1 REALITY: Human Reality Intelligence, Pain Discovery (surface / emotional / identity / hidden / future), Belief Change ladder, Market Battlefield gaps.
+  - Layer 2 CREATIVE: Attention & Behavior Engine (curiosity gap, pattern interrupt, emotional trigger, dopamine loop), Creative Director (3 concepts each with hook/script/storyboard/headline/primary_text/cta/image_prompt/why_it_works), Content Intelligence structures.
+  - Layer 3 CONVERSION: Offer Psychology, Funnel Intelligence (cold → interested → warm → ready + landing page + retargeting + email + SMS), Trust Plan, Performance Science (human metrics not just CTR), Learning Loop tags.
+- Async job model — POST /api/campaigns/build returns instantly with build_status='building', FastAPI BackgroundTasks writes each layer to Mongo as it lands, frontend polls every 4.5s so users see progressive reveal instead of a 3-minute spinner. Solves the Cloudflare ingress 100s timeout.
+- Per-layer Refine with optional cascade: refining Reality re-runs Creative + Conversion downstream automatically to keep the plan internally consistent. Refining Creative re-runs Conversion. Refining Conversion runs alone.
+- **Traction Labs Intelligence** — shared knowledge base (Mongo `intelligence` collection) keyed by (industry, kind, key). Every campaign marked WON pushes winning_hooks / winning_emotions / winning_offers / winning_angles / customer_language / objections back into the brain with weight+=3 per hit. Every existing AI agent (Ad Creator, Batch Spy, Ad Intel) now reads the top-weighted intel for the client's industry and injects it as context before generating anything new. System gets smarter with every client in a given niche.
+- New sidebar page /dashboard/intelligence — grouped card view with industry filter chips, weight badges, delete-entry.
+- Endpoints: POST /api/campaigns/build, GET /api/campaigns, GET /api/campaigns/{id}, POST /api/campaigns/{id}/refine, POST /api/campaigns/{id}/result, DELETE /api/campaigns/{id}, GET /api/intelligence, GET /api/intelligence/summary, GET /api/intelligence/industries, DELETE /api/intelligence/{id}.
+- Also increased Claude max_tokens to 8000 for the Conversion layer (schema is large).
+- Verified: 9/9 backend pytest + 17/17 regression (Ad Creator / Batch Spy / Ad Intel intelligence-injection did not break them) + full frontend E2E (iteration_10.json). No bugs.
+
+### Agency OS Backlog (updated 2026-08-03)
+- P1: Meta Ads live sync — awaiting user's META_APP_ID / META_APP_SECRET / META_ACCESS_TOKEN / act_ ids.
+- P1: One-click "Push winning ad to Meta" straight from Campaign Engine or Batch Spy.
+- P2: Angle Insights — cross-client leaderboard (now largely covered by the Intelligence page but the leaderboard view + reuse-in-ad-creator flow is not yet built).
+- P2: Server.py refactor into /app/backend/routes/ (~1400 lines now).
+- P2: Escape JSX entity warnings in dashboard components (cosmetic).
+
 - Batch Spy tab inside every Client workspace. Paste 2–N competitor ads at once → Claude returns (a) ranked competitor scores 0-100 with reasoning, (b) market gaps none exploit, (c) winning_strategy (positioning + big idea + offer), (d) beat-them-all tactics (one-click Trophy to promote into Angle Tracker), (e) campaign_brief with 3 ready-to-launch ads (hook, headline, primary_text, cta, image_prompt).
 - Each of the 3 ads exposes a "Copy ad copy (Meta / Google)" button and a "Copy Higgsfield prompt" button plus a visible raw-prompt box so the workflow is: Batch Spy → Copy prompt → paste into Higgsfield → Copy ad copy → paste into Meta/Google Ads Manager.
 - Endpoints POST/GET/DELETE /api/ads/batch-spy. Verified 4/4 backend pytest + full frontend E2E (iteration_9.json). No bugs.
