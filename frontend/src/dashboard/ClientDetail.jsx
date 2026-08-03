@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Save, Brain, FileText, ListTodo, Sparkles, Download, Trash2,
-  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink, Radar,
+  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink, Radar, Crosshair,
 } from "lucide-react";
 import api, { pdfUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AdCreator, SalesCoach, ClientReports, AdIntel } from "@/dashboard/ClientTools";
+import { AdCreator, SalesCoach, ClientReports, AdIntel, BatchSpy } from "@/dashboard/ClientTools";
 
 const FIELDS = [
   ["business_name", "Business name"], ["contact_name", "Contact name"], ["email", "Email"],

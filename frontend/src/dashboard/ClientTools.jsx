@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Loader2, Sparkles, Megaphone, PhoneCall, BarChart3, Copy, Trash2, ExternalLink,
   Target, ShieldAlert, ThumbsDown, Trophy, Gauge, Image as ImageIcon, Video, AlertCircle,
-  Radar, Upload, Swords, Lightbulb,
+  Radar, Upload, Swords, Lightbulb, Crosshair, Plus, Medal,
 } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -309,6 +309,150 @@ export function AdIntel({ clientId }) {
                     <button onClick={() => copy(d.higgsfield_prompt)} className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white"><Copy size={12} /> Copy prompt</button>
                   </div>
                   <AdVisual prompt={d.higgsfield_prompt} clientId={clientId} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============ BATCH SPY (beat-them-all brief) ============ */
+export function BatchSpy({ clientId }) {
+  const [rows, setRows] = useState([{ name: "", text: "" }, { name: "", text: "" }, { name: "", text: "" }]);
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [runs, setRuns] = useState([]);
+
+  const load = async () => {
+    const { data } = await api.get(`/ads/batch-spy?client_id=${clientId}`);
+    setRuns(data);
+  };
+  useEffect(() => { load(); }, [clientId]);
+
+  const setRow = (i, k, v) => setRows((r) => r.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
+  const addRow = () => setRows((r) => [...r, { name: "", text: "" }]);
+  const delRow = (i) => setRows((r) => r.filter((_, idx) => idx !== i));
+
+  const track = async (tactic) => {
+    try { await api.post("/angles", { client_id: clientId, tactic }); toast.success("Angle tracked"); }
+    catch { toast.error("Could not track"); }
+  };
+
+  const run = async () => {
+    const competitors = rows.filter((r) => r.text.trim());
+    if (competitors.length < 2) return toast.error("Add at least 2 competitor ads");
+    setLoading(true);
+    try {
+      await api.post("/ads/batch-spy", { client_id: clientId, competitors, notes });
+      toast.success("Beat-them-all brief ready");
+      setRows([{ name: "", text: "" }, { name: "", text: "" }, { name: "", text: "" }]);
+      setNotes("");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Batch Spy failed"); }
+    finally { setLoading(false); }
+  };
+
+  const remove = async (id) => { await api.delete(`/ads/batch-spy/${id}`); load(); };
+
+  return (
+    <div data-testid="batch-spy">
+      <div className="card-surface rounded-2xl p-6">
+        <div className="flex items-center gap-2 text-electric"><Crosshair size={18} /><h2 className="font-heading font-semibold text-lg">Batch Spy</h2></div>
+        <p className="mt-1 text-slate-400 text-sm">Drop in several competitor ads. Claude ranks them, finds the gaps none exploit, and returns one "beat-them-all" campaign brief.</p>
+        <div className="mt-4 space-y-3">
+          {rows.map((r, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-start" data-testid={`spy-row-${i}`}>
+              <Input value={r.name} onChange={(e) => setRow(i, "name", e.target.value)} placeholder={`Competitor ${i + 1} name`} className="col-span-4 bg-navy-900 border-white/10" data-testid={`spy-name-${i}`} />
+              <Textarea rows={2} value={r.text} onChange={(e) => setRow(i, "text", e.target.value)} placeholder="Paste their ad copy / offer…" className="col-span-7 bg-navy-900 border-white/10 resize-none" data-testid={`spy-text-${i}`} />
+              <button onClick={() => delRow(i)} disabled={rows.length <= 2} className="col-span-1 flex items-center justify-center h-9 text-slate-500 hover:text-coral disabled:opacity-30"><Trash2 size={15} /></button>
+            </div>
+          ))}
+          <button onClick={addRow} className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white" data-testid="spy-add-row"><Plus size={14} /> Add competitor</button>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional direction (e.g. we want to win on trust, not price)" className="bg-navy-900 border-white/10" data-testid="spy-notes" />
+          <button onClick={run} disabled={loading} className="inline-flex items-center gap-2 rounded-full bg-electric px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60" data-testid="spy-run">
+            {loading ? <><Loader2 size={15} className="animate-spin" /> Analyzing the field…</> : <><Crosshair size={15} /> Beat them all</>}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-6">
+        {runs.map((run) => {
+          const d = run.data || {};
+          const brief = d.campaign_brief || {};
+          return (
+            <div key={run.id} className="card-surface rounded-2xl p-7" data-testid={`spy-result-${run.id}`}>
+              <div className="flex items-start justify-between">
+                <h3 className="font-heading text-xl font-semibold">{brief.campaign_name || "Beat-them-all brief"}</h3>
+                <button onClick={() => remove(run.id)} className="text-slate-500 hover:text-coral"><Trash2 size={16} /></button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">{run.competitor_count} competitors analyzed · {(run.created_at || "").slice(0, 10)}</p>
+
+              {(d.ranking || []).length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2 flex items-center gap-1.5"><Medal size={13} /> Competitor ranking</p>
+                  <div className="space-y-2">
+                    {d.ranking.map((r, i) => (
+                      <div key={i} className="rounded-lg bg-white/5 p-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-semibold text-white">{i + 1}. {r.name}</span>
+                          <span className="font-mono text-electric">{r.score}/100</span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-electric" style={{ width: `${r.score}%` }} /></div>
+                        {r.why && <p className="mt-1.5 text-xs text-slate-400">{r.why}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 grid sm:grid-cols-2 gap-4">
+                {(d.market_gaps || []).length > 0 && (
+                  <div className="rounded-xl bg-white/5 p-4">
+                    <p className="text-xs font-mono uppercase tracking-widest text-electric mb-2">Market gaps</p>
+                    <ul className="space-y-1.5 text-sm text-slate-300">{d.market_gaps.map((g, i) => <li key={i} className="flex gap-2"><span className="text-electric">◦</span>{g}</li>)}</ul>
+                  </div>
+                )}
+                {(d.beat_them_all || []).length > 0 && (
+                  <div className="rounded-xl bg-white/5 p-4">
+                    <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2 flex items-center gap-1.5"><Swords size={13} /> Beat them all</p>
+                    <ul className="space-y-1.5 text-sm text-slate-300">
+                      {d.beat_them_all.map((t, i) => (
+                        <li key={i} className="flex gap-2 items-start group/bt">
+                          <span className="text-electric">→</span><span className="flex-1">{t}</span>
+                          <button onClick={() => track(t)} title="Track angle" className="text-slate-600 hover:text-emerald-400 opacity-0 group-hover/bt:opacity-100 transition-opacity"><Trophy size={12} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {d.winning_strategy && (
+                <div className="mt-4 rounded-xl border border-electric/25 bg-electric/5 p-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-electric mb-2 flex items-center gap-1.5"><Lightbulb size={13} /> Winning strategy</p>
+                  {d.winning_strategy.big_idea && <p className="font-heading font-semibold">{d.winning_strategy.big_idea}</p>}
+                  {d.winning_strategy.positioning && <p className="mt-1 text-sm text-slate-300"><span className="text-slate-500">Positioning:</span> {d.winning_strategy.positioning}</p>}
+                  {d.winning_strategy.offer && <p className="mt-1 text-sm text-slate-300"><span className="text-slate-500">Offer:</span> {d.winning_strategy.offer}</p>}
+                </div>
+              )}
+
+              {(brief.ads || []).length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2">Campaign brief · {brief.objective} {brief.budget_guidance ? `· ${brief.budget_guidance}` : ""}</p>
+                  <div className="space-y-3">
+                    {brief.ads.map((ad, i) => (
+                      <div key={i} className="rounded-xl bg-white/5 p-4 border border-white/5">
+                        <p className="text-electric text-sm font-semibold">Hook: {ad.hook}</p>
+                        <p className="mt-2 font-heading font-semibold">{ad.headline}</p>
+                        <p className="mt-1 text-slate-300 text-sm whitespace-pre-wrap">{ad.primary_text}</p>
+                        <span className="mt-2 inline-block text-xs font-mono uppercase tracking-wider text-slate-500">CTA: {ad.cta}</span>
+                        {ad.image_prompt && <AdVisual prompt={ad.image_prompt} clientId={clientId} />}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

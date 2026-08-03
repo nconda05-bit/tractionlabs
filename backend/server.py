@@ -889,6 +889,74 @@ async def delete_competitor_analysis(analysis_id: str, user: dict = Depends(get_
     return {"status": "deleted"}
 
 
+# ==================== BATCH SPY (multi-competitor -> beat-them-all brief) ====================
+class CompetitorItem(BaseModel):
+    name: Optional[str] = ""
+    text: str
+
+
+class BatchSpyRequest(BaseModel):
+    client_id: str
+    competitors: List[CompetitorItem]
+    notes: Optional[str] = ""
+
+
+@api_router.post("/ads/batch-spy")
+async def batch_spy(payload: BatchSpyRequest, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    comps = [x for x in payload.competitors if (x.text or "").strip()]
+    if len(comps) < 2:
+        raise HTTPException(status_code=400, detail="Add at least 2 competitor ads to run Batch Spy.")
+    proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
+    angles_line = ("\nPROVEN ANGLES for this niche (build on these): " + "; ".join(proven)) if proven else ""
+    comp_block = "\n".join(
+        f"{i+1}. {(x.name or 'Competitor ' + str(i+1))}: {x.text}" for i, x in enumerate(comps)
+    )
+    try:
+        data = await ai_service.ask_claude_json(
+            system_message=(
+                "You are a paid-ads strategist. You are given MULTIPLE competitor ads for the same market. "
+                "Analyze them together and produce ONE plan that beats all of them for OUR client. Return JSON: "
+                "'ranking' (array of {name, score 0-100 int, why} ranked best-first), "
+                "'market_gaps' (array of opportunities NONE of the competitors exploit), "
+                "'winning_strategy' {positioning, big_idea, offer}, "
+                "'beat_them_all' (array of specific tactics that beat the whole field), "
+                "'campaign_brief' {campaign_name, objective, budget_guidance, audiences (array of {name, targeting}), "
+                "ads (array of 3 {hook, headline, primary_text, cta, image_prompt})}."
+            ),
+            prompt=(
+                f"OUR CLIENT: {c.get('business_name')} | industry={c.get('industry')} | "
+                f"services={c.get('services')} | cities={c.get('target_cities')} | offer/notes={c.get('notes')}\n"
+                f"Extra direction: {payload.notes or 'none'}{angles_line}\n\n"
+                f"COMPETITOR ADS:\n{comp_block}"
+            ),
+            session_id=f"batchspy-{payload.client_id}",
+        )
+    except Exception as e:
+        logger.error(f"Batch spy failed: {e}")
+        raise HTTPException(status_code=502, detail="Batch Spy failed. Please check the Claude API key and try again.")
+
+    doc = {"id": str(uuid.uuid4()), "client_id": payload.client_id, "client_name": c.get("business_name"),
+           "competitor_count": len(comps), "data": data, "created_at": now_iso()}
+    await db.batch_spy.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/ads/batch-spy")
+async def list_batch_spy(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"client_id": client_id} if client_id else {}
+    return await db.batch_spy.find(q, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+
+@api_router.delete("/ads/batch-spy/{spy_id}")
+async def delete_batch_spy(spy_id: str, user: dict = Depends(get_current_user)):
+    await db.batch_spy.delete_one({"id": spy_id})
+    return {"status": "deleted"}
+
+
 # ==================== WINNING ANGLE TRACKER ====================
 class AngleCreate(BaseModel):
     client_id: str
