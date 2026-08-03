@@ -443,15 +443,34 @@ export function BatchSpy({ clientId }) {
                 <div className="mt-5">
                   <p className="text-xs font-mono uppercase tracking-widest text-coral mb-2">Campaign brief · {brief.objective} {brief.budget_guidance ? `· ${brief.budget_guidance}` : ""}</p>
                   <div className="space-y-3">
-                    {brief.ads.map((ad, i) => (
-                      <div key={i} className="rounded-xl bg-white/5 p-4 border border-white/5">
+                    {brief.ads.map((ad, i) => {
+                      const adCopy = `${ad.headline || ""}\n\n${ad.primary_text || ""}\n\nCTA: ${ad.cta || ""}`.trim();
+                      return (
+                      <div key={i} className="rounded-xl bg-white/5 p-4 border border-white/5" data-testid={`spy-ad-${i}`}>
                         <p className="text-electric text-sm font-semibold">Hook: {ad.hook}</p>
                         <p className="mt-2 font-heading font-semibold">{ad.headline}</p>
                         <p className="mt-1 text-slate-300 text-sm whitespace-pre-wrap">{ad.primary_text}</p>
                         <span className="mt-2 inline-block text-xs font-mono uppercase tracking-wider text-slate-500">CTA: {ad.cta}</span>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button onClick={() => copy(adCopy)} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-electric/60 hover:bg-electric/10 transition-colors" data-testid={`spy-copy-adcopy-${i}`}>
+                            <Copy size={12} /> Copy ad copy (Meta / Google)
+                          </button>
+                          {ad.image_prompt && (
+                            <button onClick={() => copy(ad.image_prompt)} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-coral/60 hover:bg-coral/10 transition-colors" data-testid={`spy-copy-prompt-${i}`}>
+                              <Copy size={12} /> Copy Higgsfield prompt
+                            </button>
+                          )}
+                        </div>
+                        {ad.image_prompt && (
+                          <div className="mt-3 rounded-lg bg-navy-900/60 border border-white/5 p-3">
+                            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-1">Higgsfield prompt</p>
+                            <p className="text-xs text-slate-300 whitespace-pre-wrap">{ad.image_prompt}</p>
+                          </div>
+                        )}
                         {ad.image_prompt && <AdVisual prompt={ad.image_prompt} clientId={clientId} />}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
