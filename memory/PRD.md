@@ -60,3 +60,13 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 ### Phase 5 (2026-08-02)
 - Winning Angle Tracker: track competitor "how to win" tactics per client (status Testing/Reused/Won), shown in a Winning Angles panel in the Ad Intel tab. Endpoints POST/GET/PUT/DELETE /api/angles. Proven angles are injected as context into Ad Creator + Competitor Ad Intel prompts so the AI leans into what works per niche. Verified 4/4 backend + E2E.
 
+### Phase 6 — Batch Spy (2026-08-03)
+- Batch Spy tab inside every Client workspace. Paste 2–N competitor ads at once → Claude returns (a) ranked competitor scores 0-100 with reasoning, (b) market gaps none exploit, (c) winning_strategy (positioning + big idea + offer), (d) beat-them-all tactics (one-click Trophy to promote into Angle Tracker), (e) campaign_brief with 3 ready-to-launch ads (hook, headline, primary_text, cta, image_prompt).
+- Each of the 3 ads exposes a "Copy ad copy (Meta / Google)" button and a "Copy Higgsfield prompt" button plus a visible raw-prompt box so the workflow is: Batch Spy → Copy prompt → paste into Higgsfield → Copy ad copy → paste into Meta/Google Ads Manager.
+- Endpoints POST/GET/DELETE /api/ads/batch-spy. Verified 4/4 backend pytest + full frontend E2E (iteration_9.json). No bugs.
+
+### Agency OS Backlog (updated)
+- P1: Meta Ads live sync — awaiting user's META_APP_ID / META_APP_SECRET / META_ACCESS_TOKEN / act_ ids.
+- P1: Angle Insights — cross-client "Won angles" leaderboard by niche so proven winners are reusable across every client.
+- P2: Server.py refactor into /app/backend/routes/ (currently ~1170 lines).
+- P2: Escape JSX entity warnings in dashboard components (cosmetic).
