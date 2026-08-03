@@ -22,6 +22,8 @@ from auth_service import (
 )
 import ai_service
 import higgsfield_service
+import campaign_engine
+import intelligence_service
 from pdf_utils import render_document_pdf
 
 # MongoDB
@@ -738,11 +740,15 @@ async def create_ad_campaign(payload: AdCreateRequest, user: dict = Depends(get_
         raise HTTPException(status_code=404, detail="Client not found")
     proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
     angles_line = ("\nPROVEN ANGLES that have worked for this niche (lean into these): " + "; ".join(proven)) if proven else ""
+    intel = await intelligence_service.get_intelligence(db, c.get("industry", ""))
+    intel_block = intelligence_service.intel_prompt_block(intel)
     try:
         data = await ai_service.ask_claude_json(
             system_message=(
                 "You are a performance marketer building a Facebook/Instagram lead-gen campaign for a local "
-                "service business. Return JSON with keys: 'campaign_name', 'objective' (e.g. Lead Generation), "
+                "service business. Follow the Traction Labs philosophy: understand the human first, then bridge "
+                "their problem to the solution with attention-earning creative. Return JSON with keys: "
+                "'campaign_name', 'objective' (e.g. Lead Generation), "
                 "'daily_budget' (string with $), 'audiences' (array of {name, targeting}), "
                 "'ad_sets' (array of short strings describing ad set structure), "
                 "'ads' (array of 3-4 objects {hook, headline, primary_text, cta, image_prompt}), "
@@ -751,7 +757,7 @@ async def create_ad_campaign(payload: AdCreateRequest, user: dict = Depends(get_
             prompt=(
                 f"Client: {c.get('business_name')} | industry={c.get('industry')} | "
                 f"cities={c.get('target_cities')} | services={c.get('services')} | budget={c.get('budget')} | "
-                f"offer/notes={c.get('notes')}\nExtra direction: {payload.prompt or 'none'}{angles_line}"
+                f"offer/notes={c.get('notes')}\nExtra direction: {payload.prompt or 'none'}{angles_line}{intel_block}"
             ),
             session_id=f"ads-{payload.client_id}",
         )
@@ -843,10 +849,14 @@ async def analyze_competitor(payload: CompetitorAnalyzeRequest, user: dict = Dep
         raise HTTPException(status_code=400, detail="Provide competitor ad text and/or an image to analyze.")
     proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
     angles_line = ("\nPROVEN ANGLES for this niche (favor building on these when recommending copy): " + "; ".join(proven)) if proven else ""
+    intel = await intelligence_service.get_intelligence(db, c.get("industry", ""))
+    intel_block = intelligence_service.intel_prompt_block(intel)
     try:
         data = await ai_service.ask_claude_json(
             system_message=(
-                "You are a paid-ads strategist. Analyze the competitor ad provided (text and/or the attached "
+                "You are a paid-ads strategist. Follow the Traction Labs philosophy: understand the human first "
+                "(surface pain → emotional pain → identity pain), then bridge to the solution. "
+                "Analyze the competitor ad provided (text and/or the attached "
                 "image), then produce a plan to create a BETTER, more marketable ad for OUR client's niche. "
                 "Return JSON with keys: 'breakdown' {hook, offer, angle, cta, emotional_triggers (array)}, "
                 "'strengths' (array), 'weaknesses' (array), 'how_to_win' (array of specific tactics to beat it), "
@@ -858,7 +868,7 @@ async def analyze_competitor(payload: CompetitorAnalyzeRequest, user: dict = Dep
                 f"OUR CLIENT: {c.get('business_name')} | industry={c.get('industry')} | "
                 f"services={c.get('services')} | cities={c.get('target_cities')} | offer/notes={c.get('notes')}\n\n"
                 f"COMPETITOR: {payload.competitor_name or 'Unknown'}\n"
-                f"COMPETITOR AD TEXT: {payload.competitor_text or '(see attached image)'}{angles_line}"
+                f"COMPETITOR AD TEXT: {payload.competitor_text or '(see attached image)'}{angles_line}{intel_block}"
             ),
             session_id=f"competitor-{payload.client_id}",
             image_b64=payload.image_base64,
@@ -911,13 +921,16 @@ async def batch_spy(payload: BatchSpyRequest, user: dict = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Add at least 2 competitor ads to run Batch Spy.")
     proven = await get_proven_angles(c.get("industry", ""), payload.client_id)
     angles_line = ("\nPROVEN ANGLES for this niche (build on these): " + "; ".join(proven)) if proven else ""
+    intel = await intelligence_service.get_intelligence(db, c.get("industry", ""))
+    intel_block = intelligence_service.intel_prompt_block(intel)
     comp_block = "\n".join(
         f"{i+1}. {(x.name or 'Competitor ' + str(i+1))}: {x.text}" for i, x in enumerate(comps)
     )
     try:
         data = await ai_service.ask_claude_json(
             system_message=(
-                "You are a paid-ads strategist. You are given MULTIPLE competitor ads for the same market. "
+                "You are a paid-ads strategist. Follow the Traction Labs philosophy: understand the human first, "
+                "then bridge their problem to the solution. You are given MULTIPLE competitor ads for the same market. "
                 "Analyze them together and produce ONE plan that beats all of them for OUR client. Return JSON: "
                 "'ranking' (array of {name, score 0-100 int, why} ranked best-first), "
                 "'market_gaps' (array of opportunities NONE of the competitors exploit), "
@@ -929,7 +942,7 @@ async def batch_spy(payload: BatchSpyRequest, user: dict = Depends(get_current_u
             prompt=(
                 f"OUR CLIENT: {c.get('business_name')} | industry={c.get('industry')} | "
                 f"services={c.get('services')} | cities={c.get('target_cities')} | offer/notes={c.get('notes')}\n"
-                f"Extra direction: {payload.notes or 'none'}{angles_line}\n\n"
+                f"Extra direction: {payload.notes or 'none'}{angles_line}{intel_block}\n\n"
                 f"COMPETITOR ADS:\n{comp_block}"
             ),
             session_id=f"batchspy-{payload.client_id}",
@@ -1131,6 +1144,205 @@ async def portal_report(share_token: str):
     return r
 
 
+# ==================== CAMPAIGN ENGINE (interconnected 12-agent intelligence) ====================
+class CampaignBuildRequest(BaseModel):
+    client_id: str
+    goal: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+class CampaignRefineRequest(BaseModel):
+    layer: str  # reality | creative | conversion
+    instructions: Optional[str] = ""
+    cascade: Optional[bool] = True  # re-run downstream layers to keep the plan consistent
+
+
+class CampaignResultRequest(BaseModel):
+    status: str  # won | lost | testing
+    notes: Optional[str] = ""
+    metrics: Optional[dict] = None
+
+
+async def _campaign_doc(client, goal, notes, reality, creative, conversion):
+    return {
+        "id": str(uuid.uuid4()),
+        "client_id": client.get("id"),
+        "client_name": client.get("business_name"),
+        "industry": (client.get("industry") or "").lower(),
+        "goal": goal or "",
+        "notes": notes or "",
+        "reality": reality,
+        "creative": creative,
+        "conversion": conversion,
+        "status": "draft",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+
+
+async def _run_campaign_background(campaign_id: str, client: dict, goal: str, notes: str):
+    """Progressive builder — writes each layer to Mongo as it completes so the UI can stream results."""
+    intel = await intelligence_service.get_intelligence(db, client.get("industry", ""))
+    session = f"campaign-{campaign_id}"
+    try:
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {"progress": "reality", "updated_at": now_iso()}})
+        reality = await campaign_engine.run_reality(client, goal, notes, intel, session)
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {"reality": reality, "progress": "creative", "updated_at": now_iso()}})
+
+        creative = await campaign_engine.run_creative(client, reality, intel, session)
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {"creative": creative, "progress": "conversion", "updated_at": now_iso()}})
+
+        conversion = await campaign_engine.run_conversion(client, reality, creative, intel, session)
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {
+            "conversion": conversion, "progress": "done", "build_status": "ready",
+            "updated_at": now_iso()
+        }})
+    except Exception as e:
+        logger.error(f"Campaign background build failed for {campaign_id}: {e}")
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {
+            "build_status": "failed", "build_error": str(e)[:400], "updated_at": now_iso()
+        }})
+
+
+async def _refine_layer_background(campaign_id: str, layer: str, instructions: str, cascade: bool):
+    camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not camp:
+        return
+    client = await db.clients.find_one({"id": camp.get("client_id")}, {"_id": 0})
+    if not client:
+        return
+    intel = await intelligence_service.get_intelligence(db, client.get("industry", ""))
+    session = f"campaign-{campaign_id}-refine-{layer}-{uuid.uuid4().hex[:6]}"
+    try:
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {"progress": layer, "build_status": "refining"}})
+        new_layer = await campaign_engine.refine_layer(layer, client, camp, instructions or "", intel, session)
+        updates = {layer: new_layer, "updated_at": now_iso()}
+        camp[layer] = new_layer
+        if cascade:
+            if layer == "reality":
+                await db.campaigns.update_one({"id": campaign_id}, {"$set": {"reality": new_layer, "progress": "creative"}})
+                creative = await campaign_engine.run_creative(client, new_layer, intel, session + "-cr")
+                updates["creative"] = creative
+                await db.campaigns.update_one({"id": campaign_id}, {"$set": {"creative": creative, "progress": "conversion"}})
+                conversion = await campaign_engine.run_conversion(client, new_layer, creative, intel, session + "-co")
+                updates["conversion"] = conversion
+            elif layer == "creative":
+                await db.campaigns.update_one({"id": campaign_id}, {"$set": {"creative": new_layer, "progress": "conversion"}})
+                conversion = await campaign_engine.run_conversion(client, camp.get("reality") or {}, new_layer, intel, session + "-co")
+                updates["conversion"] = conversion
+        updates["build_status"] = "ready"
+        updates["progress"] = "done"
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": updates})
+    except Exception as e:
+        logger.error(f"Campaign refine background failed for {campaign_id}: {e}")
+        await db.campaigns.update_one({"id": campaign_id}, {"$set": {
+            "build_status": "failed", "build_error": str(e)[:400], "updated_at": now_iso()
+        }})
+
+
+@api_router.post("/campaigns/build")
+async def build_campaign(payload: CampaignBuildRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    c = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "client_id": payload.client_id,
+        "client_name": c.get("business_name"),
+        "industry": (c.get("industry") or "").lower(),
+        "goal": payload.goal or "",
+        "notes": payload.notes or "",
+        "reality": None, "creative": None, "conversion": None,
+        "status": "draft", "build_status": "building", "progress": "reality",
+        "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.campaigns.insert_one({**doc})
+    doc.pop("_id", None)
+    background_tasks.add_task(_run_campaign_background, doc["id"], c, payload.goal or "", payload.notes or "")
+    return doc
+
+
+@api_router.post("/campaigns/{campaign_id}/refine")
+async def refine_campaign(campaign_id: str, payload: CampaignRefineRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    if payload.layer not in ("reality", "creative", "conversion"):
+        raise HTTPException(status_code=400, detail="layer must be reality | creative | conversion")
+    camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": {"build_status": "refining", "progress": payload.layer, "updated_at": now_iso()}})
+    background_tasks.add_task(_refine_layer_background, campaign_id, payload.layer, payload.instructions or "", bool(payload.cascade))
+    return {"status": "refining", "campaign_id": campaign_id, "layer": payload.layer}
+
+
+@api_router.get("/campaigns")
+async def list_campaigns(client_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {"client_id": client_id} if client_id else {}
+    return await db.campaigns.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api_router.get("/campaigns/{campaign_id}")
+async def get_campaign(campaign_id: str, user: dict = Depends(get_current_user)):
+    camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return camp
+
+
+@api_router.delete("/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: str, user: dict = Depends(get_current_user)):
+    await db.campaigns.delete_one({"id": campaign_id})
+    return {"status": "deleted"}
+
+
+@api_router.post("/campaigns/{campaign_id}/result")
+async def record_campaign_result(campaign_id: str, payload: CampaignResultRequest, user: dict = Depends(get_current_user)):
+    """Feed the learning loop. WON campaigns push their winning tags into the shared intelligence brain."""
+    if payload.status not in ("won", "lost", "testing"):
+        raise HTTPException(status_code=400, detail="status must be won | lost | testing")
+    camp = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    updates = {"status": payload.status, "result_notes": payload.notes or "",
+               "result_metrics": payload.metrics or {}, "updated_at": now_iso()}
+    if payload.status == "won":
+        updates["marked_won_at"] = now_iso()
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": updates})
+
+    written = 0
+    if payload.status == "won":
+        learning = campaign_engine.extract_learning(camp)
+        # Winning entries get a heavier weight so future prompts favor them.
+        written = await intelligence_service.record_learning(
+            db, camp.get("industry", ""), learning, source=f"campaign:{campaign_id}",
+            client_id=camp.get("client_id", ""), weight=3,
+        )
+    return {"status": "ok", "learnings_recorded": written}
+
+
+# ==================== INTELLIGENCE (shared knowledge base) ====================
+@api_router.get("/intelligence")
+async def api_list_intelligence(industry: Optional[str] = None, kind: Optional[str] = None,
+                                user: dict = Depends(get_current_user)):
+    return await intelligence_service.list_intelligence(db, industry=industry or "", kind=kind or "", limit=500)
+
+
+@api_router.get("/intelligence/summary")
+async def api_intelligence_summary(industry: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Top items per kind — used by the dashboard to visualize the growing brain."""
+    return await intelligence_service.get_intelligence(db, industry or "", limit=8)
+
+
+@api_router.get("/intelligence/industries")
+async def api_intelligence_industries(user: dict = Depends(get_current_user)):
+    return await db.intelligence.distinct("industry")
+
+
+@api_router.delete("/intelligence/{entry_id}")
+async def api_delete_intelligence(entry_id: str, user: dict = Depends(get_current_user)):
+    await intelligence_service.delete_intelligence(db, entry_id)
+    return {"status": "deleted"}
+
+
 # ==================== APP WIRING ====================
 app.include_router(api_router)
 
@@ -1148,6 +1360,10 @@ async def startup():
     await db.clients.create_index("id")
     await db.tasks.create_index("id")
     await db.documents.create_index("id")
+    await db.campaigns.create_index("id")
+    await db.campaigns.create_index("client_id")
+    await db.intelligence.create_index([("industry", 1), ("kind", 1), ("key", 1)], unique=True)
+    await db.intelligence.create_index("weight")
     # seed admin
     email = os.environ.get("ADMIN_EMAIL", "admin@example.com").lower()
     password = os.environ.get("ADMIN_PASSWORD", "admin123")

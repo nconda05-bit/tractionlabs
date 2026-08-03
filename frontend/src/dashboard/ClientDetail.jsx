@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Loader2, Save, Brain, FileText, ListTodo, Sparkles, Download, Trash2,
-  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink, Radar, Crosshair,
+  Plus, CheckCircle2, Circle, AlertTriangle, Megaphone, PhoneCall, BarChart3, Copy, ExternalLink, Radar, Crosshair, Rocket,
 } from "lucide-react";
 import api, { pdfUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdCreator, SalesCoach, ClientReports, AdIntel, BatchSpy } from "@/dashboard/ClientTools";
+import CampaignEngine from "@/dashboard/CampaignEngine";
 
 const FIELDS = [
   ["business_name", "Business name"], ["contact_name", "Contact name"], ["email", "Email"],
@@ -107,6 +108,7 @@ export default function ClientDetail() {
       <Tabs defaultValue="overview" className="mt-8">
         <TabsList className="bg-navy-800 border border-white/5 flex-wrap h-auto">
           <TabsTrigger value="overview" data-testid="tab-overview"><ListTodo size={15} className="mr-2" />CRM</TabsTrigger>
+          <TabsTrigger value="engine" data-testid="tab-engine"><Rocket size={15} className="mr-2" />Campaign Engine</TabsTrigger>
           <TabsTrigger value="brain" data-testid="tab-brain"><Brain size={15} className="mr-2" />AI Brain</TabsTrigger>
           <TabsTrigger value="ads" data-testid="tab-ads"><Megaphone size={15} className="mr-2" />Ad Creator</TabsTrigger>
           <TabsTrigger value="intel" data-testid="tab-intel"><Radar size={15} className="mr-2" />Ad Intel</TabsTrigger>
@@ -183,6 +185,7 @@ export default function ClientDetail() {
         </TabsContent>
 
         <TabsContent value="brain" className="mt-6"><ClientBrain client={client} reload={load} /></TabsContent>
+        <TabsContent value="engine" className="mt-6"><CampaignEngine clientId={id} /></TabsContent>
         <TabsContent value="ads" className="mt-6"><AdCreator clientId={id} /></TabsContent>
         <TabsContent value="intel" className="mt-6"><AdIntel clientId={id} /></TabsContent>
         <TabsContent value="batchspy" className="mt-6"><BatchSpy clientId={id} /></TabsContent>

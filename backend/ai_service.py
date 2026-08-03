@@ -17,14 +17,14 @@ BRAND = (
 )
 
 
-async def ask_claude(system_message: str, prompt: str, session_id: str = "traction", image_b64: str = None) -> str:
+async def ask_claude(system_message: str, prompt: str, session_id: str = "traction", image_b64: str = None, max_tokens: int = 4000) -> str:
     if not ANTHROPIC_KEY:
         raise RuntimeError("ANTHROPIC_API_KEY not configured")
     chat = LlmChat(
         api_key=ANTHROPIC_KEY,
         session_id=session_id,
         system_message=f"{BRAND}\n\n{system_message}",
-    ).with_model("anthropic", CLAUDE_MODEL)
+    ).with_model("anthropic", CLAUDE_MODEL).with_params(max_tokens=max_tokens)
     try:
         if image_b64:
             msg = UserMessage(text=prompt, file_contents=[ImageContent(image_b64)])
@@ -58,11 +58,11 @@ def _extract_json(text: str):
     return None
 
 
-async def ask_claude_json(system_message: str, prompt: str, session_id: str = "traction", image_b64: str = None):
+async def ask_claude_json(system_message: str, prompt: str, session_id: str = "traction", image_b64: str = None, max_tokens: int = 8000):
     full = (
         f"{system_message}\n\nRespond with ONLY valid JSON. No markdown, no commentary, no code fences."
     )
-    raw = await ask_claude(full, prompt, session_id=session_id, image_b64=image_b64)
+    raw = await ask_claude(full, prompt, session_id=session_id, image_b64=image_b64, max_tokens=max_tokens)
     data = _extract_json(raw)
     if data is None:
         raise ValueError(f"Could not parse JSON from Claude response: {raw[:200]}")

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, UserPlus, Bot, FileText, LogOut, ExternalLink, Menu, X, Images } from "lucide-react";
+import { LayoutDashboard, Users, UserPlus, Bot, FileText, LogOut, ExternalLink, Menu, X, Images, Brain } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { LogoMark } from "@/components/Logo";
@@ -9,6 +9,7 @@ const NAV = [
   { to: "/dashboard/clients", label: "Clients", icon: Users, testid: "nav-dash-clients" },
   { to: "/dashboard/onboard", label: "Onboard Client", icon: UserPlus, testid: "nav-dash-onboard" },
   { to: "/dashboard/coo", label: "AI COO", icon: Bot, testid: "nav-dash-coo" },
+  { to: "/dashboard/intelligence", label: "Intelligence", icon: Brain, testid: "nav-dash-intelligence" },
   { to: "/dashboard/library", label: "Creative Library", icon: Images, testid: "nav-dash-library" },
   { to: "/dashboard/documents", label: "Documents", icon: FileText, testid: "nav-dash-docs" },
 ];
