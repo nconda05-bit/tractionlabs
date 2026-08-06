@@ -24,6 +24,7 @@ import ai_service
 import higgsfield_service
 import campaign_engine
 import intelligence_service
+import value_engine_service
 from pdf_utils import render_document_pdf
 
 # MongoDB
@@ -1343,6 +1344,104 @@ async def api_delete_intelligence(entry_id: str, user: dict = Depends(get_curren
     return {"status": "deleted"}
 
 
+# ==================== VALUE ENGINE (sales prep + ROI + AI script + PDF proposal) ====================
+class ValueEngineInputs(BaseModel):
+    business_name: Optional[str] = ""
+    contact_name: Optional[str] = ""
+    email: Optional[str] = ""
+    city: Optional[str] = ""
+    industry: str = "other"
+    avg_ticket: float = 0
+    gross_margin_pct: float = 0
+    close_rate_pct: float = 0
+    current_leads: float = 0
+    ad_spend: float = 0
+    proposed_fee: float = 0
+    target_cpl: float = 50
+    capacity_monthly: float = 999999
+    notes: Optional[str] = ""
+
+
+class ValueEngineBuildRequest(BaseModel):
+    inputs: ValueEngineInputs
+    include_script: bool = True
+
+
+@api_router.get("/value-engine/templates")
+async def api_value_templates(user: dict = Depends(get_current_user)):
+    return value_engine_service.get_templates()
+
+
+@api_router.post("/value-engine/calculate")
+async def api_value_calculate(payload: ValueEngineInputs, user: dict = Depends(get_current_user)):
+    return value_engine_service.calculate(payload.model_dump())
+
+
+@api_router.post("/value-engine/build")
+async def api_value_build(payload: ValueEngineBuildRequest, user: dict = Depends(get_current_user)):
+    inputs = payload.inputs.model_dump()
+    calc = value_engine_service.calculate(inputs)
+    script = None
+    if payload.include_script:
+        intel = await intelligence_service.get_intelligence(db, inputs.get("industry") or "")
+        intel_block = intelligence_service.intel_prompt_block(intel)
+        session = f"value-engine-{uuid.uuid4().hex[:8]}"
+        try:
+            script = await value_engine_service.generate_script(inputs, calc, intel_block, session)
+        except Exception as e:
+            logger.error(f"Value Engine script failed: {e}")
+            raise HTTPException(status_code=502, detail="Sales script generation failed. Please try again.")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "inputs": inputs,
+        "calc": calc,
+        "script": script,
+        "industry": (inputs.get("industry") or "other").lower(),
+        "business_name": inputs.get("business_name") or "",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.value_engine.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/value-engine/runs")
+async def api_value_list(user: dict = Depends(get_current_user)):
+    return await db.value_engine.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+@api_router.get("/value-engine/runs/{run_id}")
+async def api_value_get(run_id: str, user: dict = Depends(get_current_user)):
+    r = await db.value_engine.find_one({"id": run_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Value Engine run not found")
+    return r
+
+
+@api_router.delete("/value-engine/runs/{run_id}")
+async def api_value_delete(run_id: str, user: dict = Depends(get_current_user)):
+    await db.value_engine.delete_one({"id": run_id})
+    return {"status": "deleted"}
+
+
+@api_router.get("/value-engine/runs/{run_id}/pdf")
+async def api_value_pdf(run_id: str, token: Optional[str] = None, request: Request = None):
+    if token:
+        decode_token(token)
+    else:
+        await get_current_user(request)
+    r = await db.value_engine.find_one({"id": run_id}, {"_id": 0})
+    if not r:
+        raise HTTPException(status_code=404, detail="Value Engine run not found")
+    proposal_doc = value_engine_service.build_proposal_doc(r.get("inputs") or {}, r.get("calc") or {}, r.get("script") or None)
+    pdf_bytes = render_document_pdf(proposal_doc)
+    fn = f"value-engine-proposal-{(r.get('business_name') or 'prospect').replace(' ', '_')}.pdf"
+    return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf",
+                             headers={"Content-Disposition": f'inline; filename="{fn}"'})
+
+
 # ==================== APP WIRING ====================
 app.include_router(api_router)
 
@@ -1364,6 +1463,8 @@ async def startup():
     await db.campaigns.create_index("client_id")
     await db.intelligence.create_index([("industry", 1), ("kind", 1), ("key", 1)], unique=True)
     await db.intelligence.create_index("weight")
+    await db.value_engine.create_index("id")
+    await db.value_engine.create_index("created_at")
     # seed admin
     email = os.environ.get("ADMIN_EMAIL", "admin@example.com").lower()
     password = os.environ.get("ADMIN_PASSWORD", "admin123")

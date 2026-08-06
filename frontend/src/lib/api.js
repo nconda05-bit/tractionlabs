@@ -26,4 +26,7 @@ api.interceptors.response.use(
 export const pdfUrl = (docId) =>
   `${process.env.REACT_APP_BACKEND_URL}/api/documents/${docId}/pdf?token=${localStorage.getItem(TOKEN_KEY)}`;
 
+export const valueEnginePdfUrl = (runId) =>
+  `${process.env.REACT_APP_BACKEND_URL}/api/value-engine/runs/${runId}/pdf?token=${localStorage.getItem(TOKEN_KEY)}`;
+
 export default api;
