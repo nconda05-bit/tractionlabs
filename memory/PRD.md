@@ -60,6 +60,17 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 ### Phase 5 (2026-08-02)
 - Winning Angle Tracker: track competitor "how to win" tactics per client (status Testing/Reused/Won), shown in a Winning Angles panel in the Ad Intel tab. Endpoints POST/GET/PUT/DELETE /api/angles. Proven angles are injected as context into Ad Creator + Competitor Ad Intel prompts so the AI leans into what works per niche. Verified 4/4 backend + E2E.
 
+### Phase 8 — Value Engine (sales prep + ROI + AI script + PDF proposal) (2026-08-06)
+- New sidebar page /dashboard/value-engine — a stand-alone tool for the agency owner to prep for a live prospect call. Independent of the client CRM so it works on cold prospects that haven't been onboarded yet.
+- **Industry templates** for hvac, roofing, landscaping, dentists, gyms (+ other) prefill typical avg ticket, gross margin, close rate, target CPL, monthly capacity, common objections, and closing angles.
+- **Live calculators** (client-side, instant): Lead Calculator (projected leads at conservative/target/stretch CPL), Profit Calculator (profit per customer × new customers), ROI Calculator ((net profit − fee) / fee), Break-even (customers needed to cover fee + ad spend).
+- **AI sales pack** (one Claude call) produces opening_hook, pain_diagnosis, value_pitch built on the prospect's OWN numbers, differentiators, objection_playbook (4-6 objection→reframe→one-liner), close, fallback_offers, and a 60-second one_page_summary. Grounded in the Traction Labs Intelligence brain for the prospect's industry so the pitch leans into hooks / language / objection reframes that have already won in that niche.
+- **Branded PDF proposal** — same xhtml2pdf pipeline as contracts / invoices, reusing pdf_utils. Sections built directly from the calc numbers so it stays custom to that prospect.
+- All runs saved to Mongo `value_engine` collection; a right-rail history lets Nasir jump back to any saved prospect mid-sales-call.
+- Endpoints: GET /api/value-engine/templates, POST /api/value-engine/calculate, POST /api/value-engine/build, GET /api/value-engine/runs, GET/DELETE /api/value-engine/runs/{id}, GET /api/value-engine/runs/{id}/pdf?token=.
+- Verified: 11/11 backend + full frontend E2E (iteration_11.json). No bugs.
+
+
 ### Phase 7 — Interconnected 12-Agent Intelligence System (2026-08-03)
 - **Campaign Engine** tab inside every Client workspace. 12 agents chained in 3 layers with each layer consuming the previous:
   - Layer 1 REALITY: Human Reality Intelligence, Pain Discovery (surface / emotional / identity / hidden / future), Belief Change ladder, Market Battlefield gaps.
@@ -80,6 +91,7 @@ Implemented & tested (backend 12/12, frontend E2E 100%):
 - P2: Server.py refactor into /app/backend/routes/ (~1400 lines now).
 - P2: Escape JSX entity warnings in dashboard components (cosmetic).
 
+### Phase 6 — Batch Spy (2026-08-03)
 - Batch Spy tab inside every Client workspace. Paste 2–N competitor ads at once → Claude returns (a) ranked competitor scores 0-100 with reasoning, (b) market gaps none exploit, (c) winning_strategy (positioning + big idea + offer), (d) beat-them-all tactics (one-click Trophy to promote into Angle Tracker), (e) campaign_brief with 3 ready-to-launch ads (hook, headline, primary_text, cta, image_prompt).
 - Each of the 3 ads exposes a "Copy ad copy (Meta / Google)" button and a "Copy Higgsfield prompt" button plus a visible raw-prompt box so the workflow is: Batch Spy → Copy prompt → paste into Higgsfield → Copy ad copy → paste into Meta/Google Ads Manager.
 - Endpoints POST/GET/DELETE /api/ads/batch-spy. Verified 4/4 backend pytest + full frontend E2E (iteration_9.json). No bugs.
