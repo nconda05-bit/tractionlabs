@@ -196,6 +196,99 @@ def calculate(inputs: dict) -> dict:
     }
 
 
+# ---------- Deal Health score (0-100) ----------
+def score_deal_health(inputs: dict, calc: dict, intel_count: int = 0) -> dict:
+    """Composite 0-100 score to instantly rank prospects worth chasing."""
+    def n(v, d=0.0):
+        try: return float(v)
+        except (TypeError, ValueError): return float(d)
+
+    scen = (calc.get("scenarios") or {}).get("target") or {}
+    roi = n(scen.get("roi_pct"))
+    margin = n(inputs.get("gross_margin_pct"))
+    new_customers = n(scen.get("new_customers"))
+    capacity = n(inputs.get("capacity_monthly"), 999999) or 999999
+    breakeven_customers = n((calc.get("breakeven") or {}).get("customers"))
+    baseline_customers = n((calc.get("baseline") or {}).get("customers"))
+
+    # 1. ROI (0-30)
+    if roi <= 0: roi_pts = 0
+    elif roi < 75: roi_pts = 5
+    elif roi < 150: roi_pts = 12
+    elif roi < 300: roi_pts = 20
+    elif roi < 500: roi_pts = 25
+    else: roi_pts = 30
+
+    # 2. Margin (0-20)
+    if margin >= 50: margin_pts = 20
+    elif margin >= 40: margin_pts = 16
+    elif margin >= 30: margin_pts = 12
+    elif margin >= 20: margin_pts = 8
+    elif margin > 0: margin_pts = 4
+    else: margin_pts = 0
+
+    # 3. Capacity fit (0-15) — how much of their capacity would the target scenario eat?
+    cap_pct = (new_customers / capacity * 100.0) if capacity > 0 else 0
+    if cap_pct <= 0: cap_pts = 0
+    elif 30 <= cap_pct <= 70: cap_pts = 15
+    elif 70 < cap_pct <= 100: cap_pts = 10
+    elif cap_pct > 100: cap_pts = 6  # over-capacity — need bigger team or more constrained plan
+    else: cap_pts = 8  # under 30% — plenty of room but small opportunity
+
+    # 4. Break-even ease (0-15) — breakeven / baseline; the lower the ratio the easier
+    if baseline_customers > 0:
+        ratio = breakeven_customers / baseline_customers
+    else:
+        ratio = breakeven_customers  # no baseline — treat raw count roughly
+    if ratio <= 0: be_pts = 15
+    elif ratio <= 0.5: be_pts = 15
+    elif ratio <= 1.0: be_pts = 10
+    elif ratio <= 2.0: be_pts = 5
+    else: be_pts = 0
+
+    # 5. Brain fit (0-10) — how much intelligence do we already have on this niche
+    if intel_count >= 30: brain_pts = 10
+    elif intel_count >= 15: brain_pts = 7
+    elif intel_count >= 5: brain_pts = 4
+    elif intel_count > 0: brain_pts = 2
+    else: brain_pts = 1
+
+    # 6. Data completeness (0-10)
+    required = ["avg_ticket", "gross_margin_pct", "close_rate_pct", "current_leads", "ad_spend", "proposed_fee", "target_cpl"]
+    filled = sum(1 for k in required if n(inputs.get(k)) > 0)
+    data_pts = round(filled / len(required) * 10)
+
+    factors = [
+        {"name": "ROI on your fee", "points": roi_pts, "max": 30, "note": f"{roi:.0f}% projected ROI"},
+        {"name": "Gross margin", "points": margin_pts, "max": 20, "note": f"{margin:.0f}% margin"},
+        {"name": "Capacity fit", "points": cap_pts, "max": 15, "note": f"{cap_pct:.0f}% of capacity used"},
+        {"name": "Break-even ease", "points": be_pts, "max": 15,
+         "note": f"{breakeven_customers:.1f} customers needed" + (f" (baseline {baseline_customers:.1f})" if baseline_customers else "")},
+        {"name": "Intelligence brain fit", "points": brain_pts, "max": 10, "note": f"{intel_count} learnings in this niche"},
+        {"name": "Data completeness", "points": data_pts, "max": 10, "note": f"{filled}/{len(required)} fields filled"},
+    ]
+    score = sum(f["points"] for f in factors)
+
+    if score >= 80: tier, tone = "Hot lead", "emerald"
+    elif score >= 60: tier, tone = "Warm — worth pursuing", "electric"
+    elif score >= 40: tier, tone = "Cool — needs work", "yellow"
+    else: tier, tone = "Cold — reconsider", "coral"
+
+    ranked = sorted(factors, key=lambda f: f["points"] / f["max"], reverse=True)
+    top_reasons = [f'{ranked[0]["name"]}: {ranked[0]["note"]}', f'{ranked[1]["name"]}: {ranked[1]["note"]}']
+    weakest = sorted(factors, key=lambda f: f["points"] / f["max"])
+    risks = [f'{weakest[0]["name"]}: {weakest[0]["note"]}', f'{weakest[1]["name"]}: {weakest[1]["note"]}']
+
+    return {
+        "score": int(score),
+        "tier": tier,
+        "tone": tone,
+        "factors": factors,
+        "top_reasons": top_reasons,
+        "risks": risks,
+    }
+
+
 # ---------- AI script ----------
 async def generate_script(inputs: dict, calc: dict, intel_block: str, session_id: str) -> dict:
     industry = (inputs.get("industry") or "other").lower()

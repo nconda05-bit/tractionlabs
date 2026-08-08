@@ -1377,10 +1377,21 @@ async def api_value_calculate(payload: ValueEngineInputs, user: dict = Depends(g
     return value_engine_service.calculate(payload.model_dump())
 
 
+@api_router.post("/value-engine/score")
+async def api_value_score(payload: ValueEngineInputs, user: dict = Depends(get_current_user)):
+    """Real-time Deal Health score without generating a script or PDF."""
+    inputs = payload.model_dump()
+    calc = value_engine_service.calculate(inputs)
+    intel_entries = await db.intelligence.count_documents({"industry": (inputs.get("industry") or "").lower()})
+    return {"calc": calc, "deal_health": value_engine_service.score_deal_health(inputs, calc, intel_entries)}
+
+
 @api_router.post("/value-engine/build")
 async def api_value_build(payload: ValueEngineBuildRequest, user: dict = Depends(get_current_user)):
     inputs = payload.inputs.model_dump()
     calc = value_engine_service.calculate(inputs)
+    intel_entries = await db.intelligence.count_documents({"industry": (inputs.get("industry") or "").lower()})
+    deal_health = value_engine_service.score_deal_health(inputs, calc, intel_entries)
     script = None
     if payload.include_script:
         intel = await intelligence_service.get_intelligence(db, inputs.get("industry") or "")
@@ -1396,6 +1407,7 @@ async def api_value_build(payload: ValueEngineBuildRequest, user: dict = Depends
         "id": str(uuid.uuid4()),
         "inputs": inputs,
         "calc": calc,
+        "deal_health": deal_health,
         "script": script,
         "industry": (inputs.get("industry") or "other").lower(),
         "business_name": inputs.get("business_name") or "",

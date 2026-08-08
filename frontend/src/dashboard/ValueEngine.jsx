@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Calculator, Loader2, Copy, Download, Trash2, Sparkles, TrendingUp,
-  DollarSign, Users, Target, Percent, Building2, PhoneCall, Zap, RefreshCw,
+  DollarSign, Users, Target, Percent, Building2, PhoneCall, Zap, RefreshCw, Flame, AlertTriangle,
 } from "lucide-react";
 import api, { valueEnginePdfUrl } from "@/lib/api";
 import { toast } from "sonner";
@@ -34,9 +34,11 @@ export default function ValueEngine() {
   const [inputs, setInputs] = useState(EMPTY_INPUTS);
   const [calc, setCalc] = useState(null);
   const [script, setScript] = useState(null);
+  const [dealHealth, setDealHealth] = useState(null);
   const [runId, setRunId] = useState(null);
   const [runs, setRuns] = useState([]);
   const [busy, setBusy] = useState(false);
+  const scoreTimer = useRef(null);
 
   const loadTemplates = useCallback(async () => {
     const { data } = await api.get("/value-engine/templates");
@@ -47,6 +49,18 @@ export default function ValueEngine() {
     setRuns(data);
   }, []);
   useEffect(() => { loadTemplates(); loadRuns(); }, [loadTemplates, loadRuns]);
+
+  // Debounced live Deal Health score whenever inputs change (needs DB for intelligence count)
+  useEffect(() => {
+    if (scoreTimer.current) clearTimeout(scoreTimer.current);
+    scoreTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await api.post("/value-engine/score", inputs);
+        setDealHealth(data.deal_health);
+      } catch { /* silent */ }
+    }, 500);
+    return () => scoreTimer.current && clearTimeout(scoreTimer.current);
+  }, [inputs]);
 
   // Apply industry template (only prefill fields that user hasn't set to non-zero)
   const applyTemplate = (industry) => {
@@ -106,6 +120,7 @@ export default function ValueEngine() {
       const { data } = await api.post("/value-engine/build", { inputs, include_script: true });
       toast.success("Sales pack ready");
       setCalc(data.calc); setScript(data.script); setRunId(data.id);
+      if (data.deal_health) setDealHealth(data.deal_health);
       loadRuns();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not build sales pack");
@@ -116,6 +131,7 @@ export default function ValueEngine() {
     const { data } = await api.get(`/value-engine/runs/${id}`);
     setInputs({ ...EMPTY_INPUTS, ...data.inputs });
     setCalc(data.calc); setScript(data.script); setRunId(data.id);
+    if (data.deal_health) setDealHealth(data.deal_health);
   };
   const remove = async (id) => {
     if (!window.confirm("Delete this saved run?")) return;
@@ -123,7 +139,7 @@ export default function ValueEngine() {
     if (runId === id) { setRunId(null); setScript(null); setCalc(null); }
     loadRuns();
   };
-  const reset = () => { setInputs(EMPTY_INPUTS); setCalc(null); setScript(null); setRunId(null); };
+  const reset = () => { setInputs(EMPTY_INPUTS); setCalc(null); setScript(null); setRunId(null); setDealHealth(null); };
 
   const shown = calc || liveCalc;
   const t = shown?.scenarios?.target;
@@ -198,6 +214,9 @@ export default function ValueEngine() {
               {busy ? <><Loader2 size={15} className="animate-spin" /> Generating…</> : <><Sparkles size={15} /> Generate sales pack</>}
             </button>
           </div>
+
+          {/* Deal Health hero card */}
+          {dealHealth && <DealHealthCard dh={dealHealth} />}
 
           {/* Numbers dashboard (LIVE) */}
           <div className="grid md:grid-cols-2 gap-4" data-testid="ve-dashboard">
@@ -285,7 +304,10 @@ export default function ValueEngine() {
               {runs.map((r) => (
                 <li key={r.id} className={`group rounded-lg border p-3 transition-colors ${runId === r.id ? "border-electric/50 bg-electric/5" : "border-white/5 hover:border-white/20 bg-white/[0.02]"}`} data-testid={`ve-run-${r.id}`}>
                   <button onClick={() => loadRun(r.id)} className="w-full text-left">
-                    <p className="text-sm font-semibold text-white truncate">{r.business_name || "Untitled prospect"}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-white truncate">{r.business_name || "Untitled prospect"}</p>
+                      {r.deal_health?.score != null && <ScoreBadge dh={r.deal_health} />}
+                    </div>
                     <p className="text-[10px] font-mono uppercase text-slate-500 mt-0.5">{r.industry} · {(r.created_at || "").slice(0, 10)}</p>
                     {r.calc?.scenarios?.target?.net_profit_after_fee != null && (
                       <p className="mt-1 text-xs text-emerald-400">{money(r.calc.scenarios.target.net_profit_after_fee)} net / mo</p>
@@ -372,3 +394,82 @@ const ScriptList = ({ label, items, testid }) => (
     </ul>
   </div>
 );
+
+/* -------- Deal Health -------- */
+const TONE_MAP = {
+  emerald: { ring: "ring-emerald-400/40", text: "text-emerald-400", bar: "bg-emerald-400", bg: "bg-emerald-400/5", border: "border-emerald-400/30", chipBg: "bg-emerald-400/15", chipText: "text-emerald-300" },
+  electric: { ring: "ring-electric/40", text: "text-electric", bar: "bg-electric", bg: "bg-electric/5", border: "border-electric/30", chipBg: "bg-electric/15", chipText: "text-electric" },
+  yellow: { ring: "ring-yellow-400/40", text: "text-yellow-400", bar: "bg-yellow-400", bg: "bg-yellow-400/5", border: "border-yellow-400/30", chipBg: "bg-yellow-400/15", chipText: "text-yellow-300" },
+  coral: { ring: "ring-coral/40", text: "text-coral", bar: "bg-coral", bg: "bg-coral/5", border: "border-coral/30", chipBg: "bg-coral/15", chipText: "text-coral" },
+};
+
+function DealHealthCard({ dh }) {
+  const t = TONE_MAP[dh.tone] || TONE_MAP.electric;
+  const dash = (dh.score / 100) * 251.3; // 2πr with r=40
+  return (
+    <div className={`card-surface rounded-2xl p-6 border ${t.border} ${t.bg}`} data-testid="ve-deal-health">
+      <div className="flex items-center gap-6 flex-wrap">
+        {/* Score ring */}
+        <div className="relative w-24 h-24 shrink-0" data-testid="ve-deal-score-ring">
+          <svg viewBox="0 0 96 96" className="w-24 h-24 -rotate-90">
+            <circle cx="48" cy="48" r="40" strokeWidth="8" className="stroke-white/10" fill="none" />
+            <circle cx="48" cy="48" r="40" strokeWidth="8" strokeLinecap="round" fill="none"
+              className={t.text}
+              style={{ stroke: "currentColor", strokeDasharray: 251.3, strokeDashoffset: 251.3 - dash, transition: "stroke-dashoffset .6s" }} />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <p className={`font-heading font-black tracking-tighter text-3xl ${t.text}`} data-testid="ve-deal-score">{dh.score}</p>
+            <p className="text-[9px] font-mono uppercase text-slate-500 -mt-1">/ 100</p>
+          </div>
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Flame size={14} className={t.text} />
+            <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500">Deal Health</p>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${t.chipBg} ${t.chipText}`} data-testid="ve-deal-tier">{dh.tier}</span>
+          </div>
+          <div className="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 mb-1">Strongest</p>
+              {(dh.top_reasons || []).map((r, i) => <p key={i} className="text-xs text-slate-300 leading-snug"><span className="text-slate-500 mr-1">·</span>{r}</p>)}
+            </div>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-coral mb-1 flex items-center gap-1"><AlertTriangle size={10} /> Weakest</p>
+              {(dh.risks || []).map((r, i) => <p key={i} className="text-xs text-slate-300 leading-snug"><span className="text-slate-500 mr-1">·</span>{r}</p>)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Factor bars */}
+      <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="ve-deal-factors">
+        {(dh.factors || []).map((f, i) => {
+          const pctPts = f.max ? (f.points / f.max) * 100 : 0;
+          return (
+            <div key={i} className="rounded-lg bg-white/[0.03] border border-white/5 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-300 font-medium truncate">{f.name}</p>
+                <p className={`text-[11px] font-mono ${t.text}`}>{f.points}/{f.max}</p>
+              </div>
+              <div className="mt-1.5 h-1 w-full rounded-full bg-white/5 overflow-hidden">
+                <div className={`h-full ${t.bar} rounded-full`} style={{ width: `${pctPts}%`, transition: "width .5s" }} />
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500 truncate">{f.note}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ScoreBadge({ dh }) {
+  const t = TONE_MAP[dh.tone] || TONE_MAP.electric;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold ${t.chipBg} ${t.chipText} shrink-0`} title={dh.tier} data-testid="ve-run-score">
+      <Flame size={9} /> {dh.score}
+    </span>
+  );
+}
+
